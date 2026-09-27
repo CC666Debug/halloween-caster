@@ -7,16 +7,18 @@ A one-tap phone remote for [Halloween Radio](https://halloweenradio.net). Cast a
 ## What it does
 
 - **Cast to speakers.** Pick a Nest speaker or a whole speaker group and start a channel with one tap. It has Stop, volume and mute controls.
-- **Listen on this device.** No speaker nearby, or on an iPhone? Tap **📱 Listen here** and the channel plays through your phone.
+- **Listen on this device.** No speaker nearby, or on an iPhone? Tap **📱 Listen here** and the channel plays through your phone, with play and stop on your lock screen too.
 - **Six channels:** Main, Oldies, Kids, Movies, Atmosphere and Instrumental, each showing the song playing now.
 - **Up next and Recently played**, so you can see what's coming and catch the name of the song you just heard.
-- **Song progress** with a countdown, **how many people are listening**, and a 🔴 **LIVE** badge when a real DJ is on air. Channels that are down show as off air.
+- **A black candle for every song.** 🕯️ It burns down beside the progress bar as the song plays, flame flickering, and a fresh one is lit for the next song.
+- **Song time your way.** Tap the time to switch between time played (`1:26 / 2:23`), time left (`−0:57 / 2:23`), or both (`1:26 · −0:57`).
+- **How many people are listening**, and a 🔴 **LIVE** badge when a real DJ is on air. Channels that are down show as off air.
 - **Data saver.** Listening on your phone away from Wi-Fi? Switch to the 64 kbps version and use half the data. If a stream won't play, the app quietly tries the other version.
 - **Favorites.** Save a song (from Now playing or Recently played) and find it later on YouTube or YouTube Music.
 - **Sleep timer.** Stop the music after 15, 30, 60 or 90 minutes.
 - **Halloween countdown.** Days until October 31 at the top. Tap it and hand-drawn bats, jack-o'-lanterns, ghosts or a coven of witches on broomsticks fly across the screen, a different group each time. On Halloween itself, they come out on their own. 🧙‍♀️
 - **Opens instantly, even offline.** Add it to your home screen and it opens straight away, even with no signal. The music comes back as soon as you reconnect.
-- **Premium channel** for Halloween Radio supporters: paste your own stream link once. The app tests it before saving, and it is kept on your phone only.
+- **Premium channel** for Halloween Radio supporters: paste your own stream link once. The app tests it before saving, keeps it on your phone only, and adds a Premium channel card that only appears once it's set up.
 
 ## Which browser to use
 
@@ -32,7 +34,7 @@ To use it like an app, open the page in Chrome and choose **Add to Home screen**
 ## Good to know
 
 - The sleep timer runs in the page, so keep the app open, or at least not closed, until it goes off.
-- Favorites, your chosen channel and the Premium link are saved only in your browser. Nothing is sent anywhere else.
+- Favorites, your chosen channel, your settings (like Data saver and the time style) and the Premium link are saved only in your browser. Nothing is sent anywhere else.
 - Found a problem, like a channel that won't play? [Open an issue](https://github.com/CC666Debug/halloween-caster/issues).
 
 ## Credits
