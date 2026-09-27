@@ -77,6 +77,24 @@
   .prog[hidden] { display: none; }
   .prog .bar { flex: 1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
   .prog .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 1s linear; }
+  .prog-time { background: none; padding: 6px 0; color: inherit; font: inherit; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* A black candle that burns down over each song. */
+  .candle { flex: none; width: 16px; height: 35px; overflow: visible; }
+  .candle .wax { transform-box: view-box; transform-origin: 10px 40px; transition: transform 1s linear; }
+  .candle .top { transition: transform 1s linear; }
+  .candle.reset .wax, .candle.reset .top { transition: none; }
+  .candle .flame {
+    transform-box: view-box; transform-origin: 10px -4px;
+    animation: candle-flicker .9s ease-in-out infinite alternate; filter: drop-shadow(0 0 3px #ff9a3c);
+  }
+  @keyframes candle-flicker {
+    0%   { transform: scale(1, 1) skewX(0deg); }
+    30%  { transform: scale(.92, 1.08) skewX(3deg); }
+    60%  { transform: scale(1.05, .95) skewX(-2deg); }
+    100% { transform: scale(.97, 1.04) skewX(1deg); }
+  }
+  @media (prefers-reduced-motion: reduce) { .candle .flame { animation: none; } }
 
   .controls {
     background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
@@ -239,7 +257,26 @@
       <div class="label" id="nowStation">Pick a channel</div>
       <div class="title" id="nowTitle">—</div>
       <div class="artist" id="nowArtist"></div>
-      <div class="prog" id="prog" hidden><div class="bar"><i id="progBar"></i></div><span id="progTime"></span></div>
+      <div class="prog" id="prog" hidden>
+        <svg class="candle" id="candle" viewBox="0 0 20 44" aria-hidden="true">
+          <defs><linearGradient id="waxShade" x1="0" x2="1">
+            <stop offset="0" stop-color="#3a2e45"/><stop offset=".35" stop-color="#1a1320"/><stop offset="1" stop-color="#050307"/>
+          </linearGradient></defs>
+          <ellipse cx="10" cy="41" rx="9" ry="2.4" fill="#3a2e45"/>
+          <g class="wax"><rect x="5" y="14" width="10" height="26" rx="1.2" fill="url(#waxShade)"/></g>
+          <g class="top" style="transform: translateY(14px)">
+            <ellipse cx="10" cy="0" rx="5" ry="1.4" fill="#2a2133"/>
+            <path fill="#1a1320" d="M13.4 0v5a1 1 0 0 0 2 0V0zM5.3 0v2.6a.9.9 0 0 1-1.8 0V0z"/>
+            <line x1="10" y1="0" x2="10" y2="-3.8" stroke="#0a070c" stroke-width=".9" stroke-linecap="round"/>
+            <g class="flame">
+              <path fill="#ffb347" d="M10-14C13-9 13.5-6.5 10-4 6.5-6.5 7-9 10-14z"/>
+              <path fill="#fff3b0" d="M10-10.5c1.5 2.5 1.6 4 0 5.3-1.6-1.3-1.5-2.8 0-5.3z"/>
+            </g>
+          </g>
+        </svg>
+        <div class="bar"><i id="progBar"></i></div>
+        <button class="prog-time" id="progTime" aria-label="Song time. Tap to change how it's shown."></button>
+      </div>
       <div class="state" id="nowState">Not casting</div>
       <div class="next" id="nowNext"></div>
     </div>
@@ -768,6 +805,31 @@ function songEntry(item) {
 
 setInterval(() => pollNowPlaying(), POLL_MS);
 
+// Tap the time to switch between these; the choice is remembered on this phone.
+const TIME_STYLES = [
+  (e, d) => clock(e) + ' / ' + clock(d),              // 1:26 / 2:23
+  (e, d) => '−' + clock(d - e) + ' / ' + clock(d),    // −0:57 / 2:23
+  (e, d) => clock(e) + ' · −' + clock(d - e),         // 1:26 · −0:57
+];
+let timeStyle = (parseInt(safeGet('hc_time'), 10) || 0) % TIME_STYLES.length;
+$('progTime').addEventListener('click', () => {
+  timeStyle = (timeStyle + 1) % TIME_STYLES.length;
+  safeSet('hc_time', String(timeStyle));
+  updateProgress();
+});
+
+// The candle burns from full (start of the song) down to a stub (end of the song).
+const candle = $('candle');
+let lastFrac = 0;
+function burnCandle(frac) {
+  // A new song: swap in a fresh candle at once instead of letting it grow back.
+  if (frac < lastFrac - 0.05) { candle.classList.add('reset'); candle.getBoundingClientRect(); }
+  candle.querySelector('.wax').style.transform = 'scaleY(' + (1 - frac * 0.85).toFixed(4) + ')';
+  candle.querySelector('.top').style.transform = 'translateY(' + (14 + frac * 22).toFixed(2) + 'px)';
+  if (candle.classList.contains('reset')) { candle.getBoundingClientRect(); candle.classList.remove('reset'); }
+  lastFrac = frac;
+}
+
 // Song progress, ticking every second; when a song runs out, check for the next one right away.
 const clock = sec => Math.floor(sec / 60) + ':' + String(Math.floor(sec % 60)).padStart(2, '0');
 function updateProgress() {
@@ -777,8 +839,10 @@ function updateProgress() {
   if (prog.hidden) return;
   const elapsed = (Date.now() - np.startedAt) / 1000;
   const shownSec = Math.min(Math.max(elapsed, 0), np.duration);
-  $('progBar').style.width = (shownSec / np.duration * 100) + '%';
-  $('progTime').textContent = clock(shownSec) + ' / ' + clock(np.duration);
+  const frac = shownSec / np.duration;
+  $('progBar').style.width = (frac * 100) + '%';
+  $('progTime').textContent = TIME_STYLES[timeStyle](shownSec, np.duration);
+  burnCandle(frac);
   if (elapsed > np.duration + 3 && Date.now() - lastPoll > 5000) pollStations([shownStation]);
 }
 setInterval(updateProgress, 1000);
