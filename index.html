@@ -94,6 +94,7 @@
     display: flex; flex-direction: column; gap: 4px;
   }
   .station .name { font-weight: 650; display: flex; align-items: center; gap: 6px; }
+  .station .ppl { margin-left: auto; font-size: 12px; font-weight: 400; color: var(--muted); white-space: nowrap; }
   .station .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); display: none; }
   .station .song { font-size: 13px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .station.active { border-color: var(--accent); background: var(--surface-2); }
@@ -246,7 +247,7 @@ STATIONS.forEach(s => {
   const b = document.createElement('button');
   b.className = 'station';
   b.dataset.id = s.id;
-  b.innerHTML = `<span class="name"><span class="dot"></span>${s.name}</span><span class="song">…</span>`;
+  b.innerHTML = `<span class="name"><span class="dot"></span>${s.name}<span class="ppl"></span></span><span class="song">…</span>`;
   b.addEventListener('click', () => chooseStation(s));
   s.el = b;
   els.stations.appendChild(b);
@@ -536,6 +537,7 @@ async function pollNowPlaying() {
       const song = (d.now_playing && d.now_playing.song) || {};
       nowPlaying[s.code] = {
         title: song.title || '', artist: song.artist || '', art: song.art || '',
+        listeners: d.listeners ? d.listeners.current : null,
         next: songEntry(d.playing_next),
         history: (d.song_history || []).map(songEntry).filter(Boolean),
       };
@@ -601,7 +603,7 @@ function render() {
 
   const shown = activeRemote || localStation || selected;
   const np = nowPlaying[shown.code] || {};
-  els.nowStation.textContent = shown.name;
+  els.nowStation.textContent = shown.name + (np.listeners != null ? ' · 👥 ' + np.listeners + ' listening' : '');
   els.nowTitle.textContent = np.title || '—';
   els.nowArtist.textContent = np.artist || '';
   els.nowNext.textContent = np.next ? 'Up next: ' + songText(np.next) : '';
@@ -633,6 +635,7 @@ function render() {
     s.el.classList.toggle('active', s === shown);
     const n = nowPlaying[s.code];
     s.el.querySelector('.song').textContent = n ? [n.artist, n.title].filter(Boolean).join(' – ') : '…';
+    s.el.querySelector('.ppl').textContent = n && n.listeners != null ? '👥 ' + n.listeners : '';
   });
 
   // Transport
