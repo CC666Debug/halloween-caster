@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Halloween Caster</title>
+<meta name="description" content="One-tap remote for casting Halloween Radio to Nest speakers and speaker groups.">
+<meta name="theme-color" content="#120d17">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root {
+    --bg: #120d17;
+    --surface: #1d1624;
+    --surface-2: #281f31;
+    --line: #3a2e45;
+    --text: #f3ecf7;
+    --muted: #a898b3;
+    --accent: #ff7a1a;
+    --accent-ink: #1a0f05;
+    --good: #7ddc6f;
+    --warn: #ffcf5c;
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100dvh;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+    -webkit-tap-highlight-color: transparent;
+  }
+  main { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: .2px; }
+  h1 span { color: var(--accent); }
+  button { font: inherit; color: inherit; border: 0; cursor: pointer; }
+  button:disabled { opacity: .45; cursor: default; }
+
+  .cast-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--surface-2); border: 1px solid var(--line);
+    padding: 10px 14px; border-radius: 999px; max-width: 60%;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cast-btn svg { flex: none; width: 20px; height: 20px; }
+  .cast-btn.connected { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .cast-btn.connecting svg { animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+
+  .notice {
+    background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--warn);
+    padding: 12px 14px; border-radius: 12px; color: var(--muted); font-size: 14px;
+  }
+  .notice[hidden] { display: none; }
+
+  .now {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px; display: grid; grid-template-columns: 88px 1fr; gap: 14px; align-items: center;
+  }
+  .now img, .art-fallback {
+    width: 88px; height: 88px; border-radius: 12px; object-fit: cover; background: var(--surface-2);
+  }
+  .art-fallback { display: grid; place-items: center; font-size: 40px; }
+  .now .label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+  .now .title { font-weight: 650; font-size: 17px; margin-top: 2px; }
+  .now .artist { color: var(--muted); }
+  .now .state { font-size: 13px; margin-top: 6px; color: var(--muted); }
+  .now .state.live { color: var(--good); }
+
+  .controls {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px 16px; display: flex; align-items: center; gap: 14px;
+  }
+  .play {
+    width: 56px; height: 56px; border-radius: 50%; flex: none;
+    background: var(--accent); color: var(--accent-ink); display: grid; place-items: center;
+  }
+  .play svg { width: 26px; height: 26px; }
+  .icon-btn { background: none; padding: 6px; display: grid; place-items: center; color: var(--muted); }
+  .icon-btn svg { width: 24px; height: 24px; }
+  input[type=range] { flex: 1; accent-color: var(--accent); height: 28px; min-width: 0; }
+
+  .stations { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .station {
+    text-align: left; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 14px; padding: 12px; min-height: 84px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .station .name { font-weight: 650; display: flex; align-items: center; gap: 6px; }
+  .station .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); display: none; }
+  .station .song { font-size: 13px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .station.active { border-color: var(--accent); background: var(--surface-2); }
+  .station.active .dot { display: inline-block; }
+
+  .row { display: flex; gap: 10px; }
+  .ghost {
+    flex: 1; background: none; border: 1px solid var(--line); border-radius: 12px;
+    padding: 10px; color: var(--muted); font-size: 14px;
+  }
+  footer { color: var(--muted); font-size: 12px; text-align: center; }
+  footer a { color: var(--muted); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>🎃 Halloween <span>Caster</span></h1>
+    <button class="cast-btn" id="castBtn" disabled>
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M1 18v3h3a3 3 0 0 0-3-3zm0-4v2a5 5 0 0 1 5 5h2a7 7 0 0 0-7-7zm0-4v2a9 9 0 0 1 9 9h2A11 11 0 0 0 1 10zm20-7H3a2 2 0 0 0-2 2v3h2V5h18v14h-7v2h7a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"/></svg>
+      <span id="castLabel">Loading…</span>
+    </button>
+  </header>
+
+  <div class="notice" id="notice" hidden></div>
+
+  <section class="now" aria-live="polite">
+    <div id="artWrap"><div class="art-fallback">🦇</div></div>
+    <div>
+      <div class="label" id="nowStation">Pick a channel</div>
+      <div class="title" id="nowTitle">—</div>
+      <div class="artist" id="nowArtist"></div>
+      <div class="state" id="nowState">Not casting</div>
+    </div>
+  </section>
+
+  <section class="controls">
+    <button class="play" id="playBtn" aria-label="Play" disabled>
+      <svg viewBox="0 0 24 24" fill="currentColor" id="playIcon"><path d="M8 5v14l11-7z"/></svg>
+    </button>
+    <button class="icon-btn" id="muteBtn" aria-label="Mute" disabled>
+      <svg viewBox="0 0 24 24" fill="currentColor" id="muteIcon"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4z"/></svg>
+    </button>
+    <label class="sr" for="vol">Speaker volume</label>
+    <input type="range" id="vol" min="0" max="100" step="1" value="50" disabled>
+  </section>
+
+  <section class="stations" id="stations" aria-label="Channels"></section>
+
+  <div class="row">
+    <button class="ghost" id="disconnectBtn" disabled>Disconnect speakers</button>
+  </div>
+
+  <footer>Unofficial remote. Music streamed from <a href="https://halloweenradio.net" target="_blank" rel="noopener">halloweenradio.net</a>.</footer>
+</main>
+
+<script>
+const STATIONS = [
+  { id: 'main',         name: 'Main',         code: 'halloween_radio_main',         url: 'https://radio1.streamserver.link/radio/8000/hrm-mp3', type: 'audio/mpeg' },
+  { id: 'oldies',       name: 'Oldies',       code: 'halloween_radio_oldies',       url: 'https://radio1.streamserver.link/radio/8020/hro-mp3', type: 'audio/mpeg' },
+  { id: 'kids',         name: 'Kids',         code: 'halloween_radio_kids',         url: 'https://radio1.streamserver.link/radio/8030/hrk-mp3', type: 'audio/mpeg' },
+  { id: 'movies',       name: 'Movies',       code: 'halloween_radio_movies',       url: 'https://radio1.streamserver.link/radio/8050/hrs-mp3', type: 'audio/mpeg' },
+  { id: 'atmosphere',   name: 'Atmosphere',   code: 'halloween_radio_atmosphere',   url: 'https://radio1.streamserver.link/radio/8040/hra-mp3', type: 'audio/mpeg' },
+  { id: 'instrumental', name: 'Instrumental', code: 'halloween_radio_instrumental', url: 'https://radio1.streamserver.link/radio/8100/hri-aac', type: 'audio/aac' },
+];
+const NOW_PLAYING = code => `https://radio1.streamserver.link/api/nowplaying_static/${code}.json`;
+const POLL_MS = 15000;
+
+const $ = id => document.getElementById(id);
+const els = {
+  castBtn: $('castBtn'), castLabel: $('castLabel'), notice: $('notice'),
+  artWrap: $('artWrap'), nowStation: $('nowStation'), nowTitle: $('nowTitle'),
+  nowArtist: $('nowArtist'), nowState: $('nowState'),
+  playBtn: $('playBtn'), playIcon: $('playIcon'), muteBtn: $('muteBtn'), muteIcon: $('muteIcon'),
+  vol: $('vol'), stations: $('stations'), disconnectBtn: $('disconnectBtn'),
+};
+
+const ICONS = {
+  play: '<path d="M8 5v14l11-7z"/>',
+  stop: '<path d="M6 6h12v12H6z"/>',
+  vol:  '<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4z"/>',
+  mute: '<path d="M16.5 12A4.5 4.5 0 0 0 14 8v2.2l2.4 2.4c.1-.2.1-.4.1-.6zM19 12c0 .9-.2 1.8-.5 2.6l1.5 1.5A8.8 8.8 0 0 0 21 12a9 9 0 0 0-7-8.8v2.1a7 7 0 0 1 5 6.7zM4.3 3 3 4.3 7.7 9H3v6h4l5 5v-6.7l4.3 4.3c-.7.5-1.4.9-2.3 1.2v2.1a9 9 0 0 0 3.7-1.8l2 2 1.3-1.3L4.3 3zM12 4 9.9 6.1 12 8.2V4z"/>',
+};
+
+// ── State ────────────────────────────────────────
+let selected = STATIONS.find(s => s.id === safeGet('hc_station')) || STATIONS[0];
+let pendingLoad = null;   // station to load once a session connects
+const nowPlaying = {};    // code -> { title, artist, art }
+let ctx = null, player = null, ctrl = null;
+
+function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function safeSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+// ── Station buttons ─────────────────────────────
+STATIONS.forEach(s => {
+  const b = document.createElement('button');
+  b.className = 'station';
+  b.dataset.id = s.id;
+  b.innerHTML = `<span class="name"><span class="dot"></span>${s.name}</span><span class="song">…</span>`;
+  b.addEventListener('click', () => chooseStation(s));
+  s.el = b;
+  els.stations.appendChild(b);
+});
+
+function chooseStation(s) {
+  selected = s;
+  safeSet('hc_station', s.id);
+  if (!ctx) { render(); return; }
+  if (ctx.getCurrentSession()) {
+    loadStation(s);
+  } else {
+    pendingLoad = s;
+    ctx.requestSession().catch(err => {
+      pendingLoad = null;
+      if (err !== 'cancel') showNotice('Couldn’t connect to the speaker (' + err + '). Try again.');
+    });
+  }
+  render();
+}
+
+// ── Casting ─────────────────────────────────────
+window.__onGCastApiAvailable = function (available) {
+  if (!available) {
+    showNotice('Casting isn’t available in this browser. Open this page in Chrome on Android.');
+    els.castLabel.textContent = 'Unavailable';
+    return;
+  }
+  ctx = cast.framework.CastContext.getInstance();
+  ctx.setOptions({
+    receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+    autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
+    resumeSavedSession: true,
+  });
+  player = new cast.framework.RemotePlayer();
+  ctrl = new cast.framework.RemotePlayerController(player);
+
+  ctrl.addEventListener(cast.framework.RemotePlayerEventType.ANY_CHANGE, render);
+  ctx.addEventListener(cast.framework.CastContextEventType.CAST_STATE_CHANGED, render);
+  ctx.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED, e => {
+    const S = cast.framework.SessionState;
+    if (e.sessionState === S.SESSION_STARTED && pendingLoad) {
+      const s = pendingLoad; pendingLoad = null;
+      loadStation(s);
+    }
+    if (e.sessionState === S.SESSION_START_FAILED) {
+      pendingLoad = null;
+      showNotice('The speaker didn’t accept the connection. Try again.');
+    }
+    render();
+  });
+  render();
+};
+
+function loadStation(s) {
+  const session = ctx.getCurrentSession();
+  if (!session) return;
+  const info = new chrome.cast.media.MediaInfo(s.url, s.type);
+  info.streamType = chrome.cast.media.StreamType.LIVE;
+  const md = new chrome.cast.media.GenericMediaMetadata();
+  md.title = 'Halloween Radio · ' + s.name;
+  const np = nowPlaying[s.code];
+  if (np) {
+    md.subtitle = [np.artist, np.title].filter(Boolean).join(' – ');
+    if (np.art) md.images = [new chrome.cast.Image(np.art)];
+  }
+  info.metadata = md;
+  const req = new chrome.cast.media.LoadRequest(info);
+  req.autoplay = true;
+  hideNotice();
+  session.loadMedia(req).catch(err => showNotice('The speaker couldn’t start ' + s.name + ' (' + err + ').'));
+}
+
+// Which of our stations is the speaker actually playing right now?
+function remoteStation() {
+  const id = player && player.mediaInfo && player.mediaInfo.contentId;
+  return id ? STATIONS.find(s => s.url === id) || 'other' : null;
+}
+
+els.castBtn.addEventListener('click', () => {
+  if (!ctx) return;
+  // requestSession opens Chrome's device picker (speakers and groups); when connected it lets you switch or stop.
+  ctx.requestSession().catch(() => {});
+});
+
+els.playBtn.addEventListener('click', () => {
+  if (!ctx) return;
+  const PS = chrome.cast.media.PlayerState;
+  const active = player.isMediaLoaded && player.playerState && player.playerState !== PS.IDLE;
+  if (active) {
+    // Live radio: stop rather than pause, so Play rejoins the broadcast at "now".
+    ctrl.stop();
+  } else {
+    chooseStation(selected);
+  }
+});
+
+els.muteBtn.addEventListener('click', () => ctrl && ctrl.muteOrUnmute());
+
+let volTimer = null;
+els.vol.addEventListener('input', () => {
+  if (!ctrl) return;
+  clearTimeout(volTimer);
+  volTimer = setTimeout(() => {
+    player.volumeLevel = els.vol.value / 100;
+    ctrl.setVolumeLevel();
+  }, 60);
+});
+
+els.disconnectBtn.addEventListener('click', () => {
+  if (ctx && ctx.getCurrentSession()) ctx.endCurrentSession(true);
+});
+
+// ── Now playing (station's public feed) ─────────
+async function pollNowPlaying() {
+  if (document.hidden) return;
+  await Promise.all(STATIONS.map(async s => {
+    try {
+      const r = await fetch(NOW_PLAYING(s.code), { cache: 'no-store' });
+      if (!r.ok) return;
+      const d = await r.json();
+      const song = (d.now_playing && d.now_playing.song) || {};
+      nowPlaying[s.code] = { title: song.title || '', artist: song.artist || '', art: song.art || '' };
+    } catch (e) {}
+  }));
+  render();
+}
+setInterval(pollNowPlaying, POLL_MS);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) pollNowPlaying(); });
+pollNowPlaying();
+
+// ── Rendering ───────────────────────────────────
+function showNotice(msg) { els.notice.textContent = msg; els.notice.hidden = false; }
+function hideNotice() { els.notice.hidden = true; }
+
+let lastArt = null;
+function setArt(url) {
+  if (url === lastArt) return;
+  lastArt = url;
+  if (url) {
+    const img = new Image();
+    img.alt = '';
+    img.src = url;
+    img.onerror = () => { els.artWrap.innerHTML = '<div class="art-fallback">🦇</div>'; };
+    els.artWrap.replaceChildren(img);
+  } else {
+    els.artWrap.innerHTML = '<div class="art-fallback">🦇</div>';
+  }
+}
+
+function render() {
+  const CS = window.cast && cast.framework && cast.framework.CastState;
+  const castState = ctx ? ctx.getCastState() : null;
+  const session = ctx && ctx.getCurrentSession();
+  const connected = !!session;
+  const deviceName = session ? session.getCastDevice().friendlyName : '';
+
+  // Cast button
+  els.castBtn.disabled = !ctx || castState === (CS && CS.NO_DEVICES_AVAILABLE);
+  els.castBtn.classList.toggle('connected', connected);
+  els.castBtn.classList.toggle('connecting', castState === (CS && CS.CONNECTING));
+  els.castLabel.textContent =
+    !ctx ? (els.castLabel.textContent === 'Unavailable' ? 'Unavailable' : 'Loading…')
+    : connected ? deviceName
+    : castState === CS.CONNECTING ? 'Connecting…'
+    : castState === CS.NO_DEVICES_AVAILABLE ? 'No speakers found'
+    : 'Choose speaker';
+
+  // What the speaker is doing
+  const PS = window.chrome && chrome.cast && chrome.cast.media && chrome.cast.media.PlayerState;
+  const remote = connected ? remoteStation() : null;
+  const pstate = connected && player && player.isMediaLoaded ? player.playerState : null;
+  const playing = pstate === (PS && PS.PLAYING);
+  const buffering = pstate === (PS && PS.BUFFERING);
+  const activeRemote = remote && remote !== 'other' && pstate && pstate !== PS.IDLE ? remote : null;
+
+  const shown = activeRemote || selected;
+  const np = nowPlaying[shown.code] || {};
+  els.nowStation.textContent = shown.name;
+  els.nowTitle.textContent = np.title || '—';
+  els.nowArtist.textContent = np.artist || '';
+  setArt(np.art || null);
+
+  let stateText = 'Not casting';
+  els.nowState.classList.remove('live');
+  if (pendingLoad || (castState === (CS && CS.CONNECTING))) stateText = 'Connecting to speaker…';
+  else if (connected && remote === 'other' && pstate && pstate !== PS.IDLE) stateText = deviceName + ' is playing something else';
+  else if (connected && buffering) stateText = 'Starting on ' + deviceName + '…';
+  else if (connected && playing) { stateText = 'Live on ' + deviceName; els.nowState.classList.add('live'); }
+  else if (connected) stateText = 'Connected to ' + deviceName + ' · stopped';
+  els.nowState.textContent = stateText;
+
+  // Station highlight follows the speaker when it's playing one of ours
+  STATIONS.forEach(s => {
+    s.el.classList.toggle('active', s === shown);
+    const n = nowPlaying[s.code];
+    s.el.querySelector('.song').textContent = n ? [n.artist, n.title].filter(Boolean).join(' – ') : '…';
+  });
+
+  // Transport
+  const active = !!activeRemote || (remote === 'other' && pstate && pstate !== PS.IDLE);
+  els.playBtn.disabled = !ctx;
+  els.playIcon.innerHTML = active ? ICONS.stop : ICONS.play;
+  els.playBtn.setAttribute('aria-label', active ? 'Stop' : 'Play');
+
+  els.muteBtn.disabled = !connected;
+  els.vol.disabled = !connected;
+  els.disconnectBtn.disabled = !connected;
+  if (connected && player) {
+    els.muteIcon.innerHTML = player.isMuted ? ICONS.mute : ICONS.vol;
+    if (document.activeElement !== els.vol && !volTimer) els.vol.value = Math.round(player.volumeLevel * 100);
+  }
+}
+els.vol.addEventListener('change', () => setTimeout(() => { volTimer = null; }, 800));
+
+render();
+</script>
+<script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
+</body>
+</html>
