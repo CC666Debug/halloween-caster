@@ -10,6 +10,8 @@ A one-tap phone remote for [Halloween Radio](https://halloweenradio.net). Cast a
 - **Listen on this device.** No speaker nearby, or on an iPhone? Tap **📱 Listen here** and the channel plays through your phone.
 - **Six channels:** Main, Oldies, Kids, Movies, Atmosphere and Instrumental, each showing the song playing now.
 - **Up next and Recently played**, so you can see what's coming and catch the name of the song you just heard.
+- **Song progress** with a countdown, **how many people are listening**, and a 🔴 **LIVE** badge when a real DJ is on air. Channels that are down show as off air.
+- **Data saver.** Listening on your phone away from Wi-Fi? Switch to the 64 kbps version and use half the data. If a stream won't play, the app quietly tries the other version.
 - **Favorites.** Save a song (from Now playing or Recently played) and find it later on YouTube or YouTube Music.
 - **Sleep timer.** Stop the music after 15, 30, 60 or 90 minutes.
 - **Premium channel** for Halloween Radio supporters: paste your own stream link once. It is kept on your phone only.

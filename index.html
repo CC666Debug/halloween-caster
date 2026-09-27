@@ -73,6 +73,10 @@
   .now .state.live { color: var(--good); }
   .now .next { font-size: 13px; color: var(--muted); margin-top: 4px; }
   .now .next:empty { display: none; }
+  .prog { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .prog[hidden] { display: none; }
+  .prog .bar { flex: 1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+  .prog .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 1s linear; }
 
   .controls {
     background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
@@ -99,6 +103,8 @@
   .station .song { font-size: 13px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .station.active { border-color: var(--accent); background: var(--surface-2); }
   .station.active .dot { display: inline-block; }
+  .station .onair { font-size: 11px; font-weight: 700; color: #ff5a5a; white-space: nowrap; }
+  .station.off { opacity: .5; }
 
   .row { display: flex; gap: 10px; }
   .ghost.on { border-color: var(--accent); color: var(--accent); }
@@ -149,6 +155,7 @@
       <div class="label" id="nowStation">Pick a channel</div>
       <div class="title" id="nowTitle">—</div>
       <div class="artist" id="nowArtist"></div>
+      <div class="prog" id="prog" hidden><div class="bar"><i id="progBar"></i></div><span id="progTime"></span></div>
       <div class="state" id="nowState">Not casting</div>
       <div class="next" id="nowNext"></div>
     </div>
@@ -189,7 +196,11 @@
   </div>
 
   <div class="row">
+    <button class="ghost" id="saverBtn" aria-pressed="false">📶 Data saver: off</button>
     <button class="ghost" id="disconnectBtn" disabled>Disconnect</button>
+  </div>
+
+  <div class="row">
     <button class="ghost" id="premiumBtn">Add Premium</button>
   </div>
 
@@ -198,15 +209,27 @@
 
 <script>
 const STATIONS = [
-  { id: 'main',         name: 'Main',         code: 'halloween_radio_main',         url: 'https://radio1.streamserver.link/radio/8000/hrm-mp3', type: 'audio/mpeg' },
-  { id: 'oldies',       name: 'Oldies',       code: 'halloween_radio_oldies',       url: 'https://radio1.streamserver.link/radio/8020/hro-mp3', type: 'audio/mpeg' },
-  { id: 'kids',         name: 'Kids',         code: 'halloween_radio_kids',         url: 'https://radio1.streamserver.link/radio/8030/hrk-mp3', type: 'audio/mpeg' },
-  { id: 'movies',       name: 'Movies',       code: 'halloween_radio_movies',       url: 'https://radio1.streamserver.link/radio/8050/hrs-mp3', type: 'audio/mpeg' },
-  { id: 'atmosphere',   name: 'Atmosphere',   code: 'halloween_radio_atmosphere',   url: 'https://radio1.streamserver.link/radio/8040/hra-mp3', type: 'audio/mpeg' },
+  { id: 'main',         name: 'Main',         code: 'halloween_radio_main',         url: 'https://radio1.streamserver.link/radio/8000/hrm-mp3', type: 'audio/mpeg',
+    lite: 'https://radio1.streamserver.link/radio/8000/hrm-aac' },
+  { id: 'oldies',       name: 'Oldies',       code: 'halloween_radio_oldies',       url: 'https://radio1.streamserver.link/radio/8020/hro-mp3', type: 'audio/mpeg',
+    lite: 'https://radio1.streamserver.link/radio/8020/hro-aac' },
+  { id: 'kids',         name: 'Kids',         code: 'halloween_radio_kids',         url: 'https://radio1.streamserver.link/radio/8030/hrk-mp3', type: 'audio/mpeg',
+    lite: 'https://radio1.streamserver.link/radio/8030/hrk-aac' },
+  { id: 'movies',       name: 'Movies',       code: 'halloween_radio_movies',       url: 'https://radio1.streamserver.link/radio/8050/hrs-mp3', type: 'audio/mpeg',
+    lite: 'https://radio1.streamserver.link/radio/8050/hrs-aac' },
+  { id: 'atmosphere',   name: 'Atmosphere',   code: 'halloween_radio_atmosphere',   url: 'https://radio1.streamserver.link/radio/8040/hra-mp3', type: 'audio/mpeg',
+    lite: 'https://radio1.streamserver.link/radio/8040/hra-aac' },
   { id: 'instrumental', name: 'Instrumental', code: 'halloween_radio_instrumental', url: 'https://radio1.streamserver.link/radio/8100/hri-aac', type: 'audio/aac' },
 ];
 const NOW_PLAYING = code => `https://radio1.streamserver.link/api/nowplaying_static/${code}.json`;
 const POLL_MS = 15000;
+
+// Data saver plays the 64 kbps version on this device (half the data of 128 kbps MP3).
+// Speakers always get full quality, since they're on Wi-Fi.
+let dataSaver = safeGet('hc_saver') === '1';
+const streamFor = s => dataSaver && s.lite ? { url: s.lite, type: 'audio/aac' } : { url: s.url, type: s.type };
+// The other version of the same channel, used as a backup if one won't play.
+const backupFor = (s, url) => !s.lite ? null : url === s.lite ? { url: s.url, type: s.type } : { url: s.lite, type: 'audio/aac' };
 
 // Premium is for supporters: its link is pasted once and kept only on this device, never in this public code.
 const PREMIUM_KEY = 'hc_premium_url';
@@ -247,7 +270,7 @@ STATIONS.forEach(s => {
   const b = document.createElement('button');
   b.className = 'station';
   b.dataset.id = s.id;
-  b.innerHTML = `<span class="name"><span class="dot"></span>${s.name}<span class="ppl"></span></span><span class="song">…</span>`;
+  b.innerHTML = `<span class="name"><span class="dot"></span>${s.name}<span class="onair"></span><span class="ppl"></span></span><span class="song">…</span>`;
   b.addEventListener('click', () => chooseStation(s));
   s.el = b;
   els.stations.appendChild(b);
@@ -308,10 +331,10 @@ window.__onGCastApiAvailable = function (available) {
   render();
 };
 
-function loadStation(s) {
+function loadStation(s, stream = { url: s.url, type: s.type }, isBackup = false) {
   const session = ctx.getCurrentSession();
   if (!session) return;
-  const info = new chrome.cast.media.MediaInfo(s.url, s.type);
+  const info = new chrome.cast.media.MediaInfo(stream.url, stream.type);
   info.streamType = chrome.cast.media.StreamType.LIVE;
   const md = new chrome.cast.media.GenericMediaMetadata();
   md.title = 'Halloween Radio · ' + s.name;
@@ -324,13 +347,17 @@ function loadStation(s) {
   const req = new chrome.cast.media.LoadRequest(info);
   req.autoplay = true;
   hideNotice();
-  session.loadMedia(req).catch(err => showNotice('The speaker couldn’t start ' + s.name + ' (' + err + ').'));
+  session.loadMedia(req).catch(err => {
+    const backup = !isBackup && backupFor(s, stream.url);
+    if (backup) loadStation(s, backup, true);
+    else showNotice('The speaker couldn’t start ' + s.name + ' (' + err + ').');
+  });
 }
 
 // Which of our stations is the speaker actually playing right now?
 function remoteStation() {
   const id = player && player.mediaInfo && player.mediaInfo.contentId;
-  return id ? STATIONS.find(s => s.url === id) || 'other' : null;
+  return id ? STATIONS.find(s => s.url === id || s.lite === id) || 'other' : null;
 }
 
 els.castBtn.addEventListener('click', () => {
@@ -395,16 +422,19 @@ const audio = new Audio();
 audio.preload = 'none';
 let localStation = null;   // station playing through this phone, if any
 let hereLive = false;      // true once audio is actually coming out
+let triedBackup = false;   // already switched to the other version once for this play
 
 function playHere(s) {
   selected = s;
   localStation = s;
   hereLive = false;
-  audio.src = s.url;
+  triedBackup = false;
+  audio.src = streamFor(s).url;
   audio.volume = els.vol.value / 100;
   hideNotice();
   audio.play().catch(err => {
-    if (localStation !== s) return;
+    // Stream failures are handled by the 'error' listener (which may retry); this catches blocked playback.
+    if (localStation !== s || err.name !== 'NotAllowedError') return;
     localStation = null;
     showNotice('This device couldn’t play ' + s.name + ' (' + err.message + ').');
     render();
@@ -427,9 +457,30 @@ audio.addEventListener('waiting', () => { hereLive = false; render(); });
 audio.addEventListener('error', () => {
   if (!localStation) return;
   const s = localStation;
+  const backup = !triedBackup && backupFor(s, audio.src);
+  if (backup) {
+    triedBackup = true;
+    audio.src = backup.url;
+    audio.play().catch(() => {});
+    return;
+  }
   stopHere();
   showNotice('Lost the ' + s.name + ' stream. Tap the channel to try again.');
 });
+
+const saverBtn = $('saverBtn');
+function renderSaver() {
+  saverBtn.textContent = '📶 Data saver: ' + (dataSaver ? 'on' : 'off');
+  saverBtn.classList.toggle('on', dataSaver);
+  saverBtn.setAttribute('aria-pressed', String(dataSaver));
+}
+saverBtn.addEventListener('click', () => {
+  dataSaver = !dataSaver;
+  safeSet('hc_saver', dataSaver ? '1' : '0');
+  renderSaver();
+  if (localStation) playHere(localStation);   // switch the stream now
+});
+renderSaver();
 
 els.hereBtn.addEventListener('click', () => localStation ? stopHere() : playHere(selected));
 
@@ -527,8 +578,10 @@ function renderFavs() {
 renderFavs();
 
 // ── Now playing (station's public feed) ─────────
+let lastPoll = 0;
 async function pollNowPlaying() {
   if (document.hidden) return;
+  lastPoll = Date.now();
   await Promise.all(STATIONS.map(async s => {
     try {
       const r = await fetch(NOW_PLAYING(s.code), { cache: 'no-store' });
@@ -538,6 +591,10 @@ async function pollNowPlaying() {
       nowPlaying[s.code] = {
         title: song.title || '', artist: song.artist || '', art: song.art || '',
         listeners: d.listeners ? d.listeners.current : null,
+        duration: (d.now_playing && d.now_playing.duration) || 0,
+        startedAt: Date.now() - ((d.now_playing && d.now_playing.elapsed) || 0) * 1000,
+        dj: d.live && d.live.is_live ? (d.live.streamer_name || 'a DJ') : '',
+        online: d.is_online !== false,
         next: songEntry(d.playing_next),
         history: (d.song_history || []).map(songEntry).filter(Boolean),
       };
@@ -553,6 +610,21 @@ function songEntry(item) {
 }
 
 setInterval(pollNowPlaying, POLL_MS);
+
+// Song progress, ticking every second; when a song runs out, check for the next one right away.
+const clock = sec => Math.floor(sec / 60) + ':' + String(Math.floor(sec % 60)).padStart(2, '0');
+function updateProgress() {
+  const np = shownStation && nowPlaying[shownStation.code];
+  const prog = $('prog');
+  prog.hidden = !(np && np.duration);
+  if (prog.hidden) return;
+  const elapsed = (Date.now() - np.startedAt) / 1000;
+  const shownSec = Math.min(Math.max(elapsed, 0), np.duration);
+  $('progBar').style.width = (shownSec / np.duration * 100) + '%';
+  $('progTime').textContent = clock(shownSec) + ' / ' + clock(np.duration);
+  if (elapsed > np.duration + 3 && Date.now() - lastPoll > 5000) pollNowPlaying();
+}
+setInterval(updateProgress, 1000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) pollNowPlaying(); });
 pollNowPlaying();
 
@@ -561,6 +633,7 @@ function showNotice(msg) { els.notice.textContent = msg; els.notice.hidden = fal
 function hideNotice() { els.notice.hidden = true; }
 
 let lastArt = null;
+let shownStation = null;   // channel shown in the Now card (drives the progress bar)
 function setArt(url) {
   if (url === lastArt) return;
   lastArt = url;
@@ -603,7 +676,13 @@ function render() {
 
   const shown = activeRemote || localStation || selected;
   const np = nowPlaying[shown.code] || {};
-  els.nowStation.textContent = shown.name + (np.listeners != null ? ' · 👥 ' + np.listeners + ' listening' : '');
+  els.nowStation.textContent = [
+    shown.name,
+    np.online === false ? 'off air' : '',
+    np.dj ? '🔴 Live with ' + np.dj : '',
+    np.listeners != null ? '👥 ' + np.listeners + ' listening' : '',
+  ].filter(Boolean).join(' · ');
+  if (shownStation !== shown) { shownStation = shown; updateProgress(); }
   els.nowTitle.textContent = np.title || '—';
   els.nowArtist.textContent = np.artist || '';
   els.nowNext.textContent = np.next ? 'Up next: ' + songText(np.next) : '';
@@ -634,7 +713,9 @@ function render() {
   STATIONS.forEach(s => {
     s.el.classList.toggle('active', s === shown);
     const n = nowPlaying[s.code];
-    s.el.querySelector('.song').textContent = n ? [n.artist, n.title].filter(Boolean).join(' – ') : '…';
+    s.el.querySelector('.song').textContent = !n ? '…' : n.online === false ? 'Off air right now' : songText(n);
+    s.el.querySelector('.onair').textContent = n && n.dj ? '🔴 LIVE' : '';
+    s.el.classList.toggle('off', !!n && n.online === false);
     s.el.querySelector('.ppl').textContent = n && n.listeners != null ? '👥 ' + n.listeners : '';
   });
 
