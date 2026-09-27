@@ -102,6 +102,26 @@
     flex: 1; background: none; border: 1px solid var(--line); border-radius: 12px;
     padding: 10px; color: var(--muted); font-size: 14px;
   }
+  .song-actions { grid-column: 1 / -1; display: flex; gap: 8px; }
+  .pill {
+    flex: 1; text-align: center; text-decoration: none; font-size: 14px;
+    background: var(--surface-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 999px; padding: 9px 10px;
+  }
+  .pill.saved { border-color: var(--accent); color: var(--accent); }
+
+  .favs { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 16px; }
+  .favs summary { cursor: pointer; padding: 12px 0; font-weight: 650; }
+  .favs summary span { color: var(--muted); font-weight: 400; }
+  .favs ul { list-style: none; margin: 0 0 8px; padding: 0; }
+  .favs li { border-top: 1px solid var(--line); padding: 10px 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; }
+  .favs .f-song { font-weight: 600; overflow-wrap: anywhere; }
+  .favs .f-meta { font-size: 12px; color: var(--muted); grid-column: 1; }
+  .favs .f-links { grid-column: 1; display: flex; gap: 14px; font-size: 13px; }
+  .favs .f-links a { color: var(--accent); text-decoration: none; }
+  .favs .f-del { grid-column: 2; grid-row: 1 / span 3; align-self: center; background: none; color: var(--muted); font-size: 18px; padding: 8px; }
+  .favs .empty { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
+  .favs .empty[hidden] { display: none; }
   footer { color: var(--muted); font-size: 12px; text-align: center; }
   footer a { color: var(--muted); }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
@@ -127,6 +147,10 @@
       <div class="artist" id="nowArtist"></div>
       <div class="state" id="nowState">Not casting</div>
     </div>
+    <div class="song-actions">
+      <button class="pill" id="favBtn" disabled>🤍 Save</button>
+      <a class="pill" id="bewitchLink" href="https://halloweenradio.net/playlist" target="_blank" rel="noopener">👻 Bewitch on site</a>
+    </div>
   </section>
 
   <section class="controls">
@@ -141,6 +165,12 @@
   </section>
 
   <section class="stations" id="stations" aria-label="Channels"></section>
+
+  <details class="favs" id="favs">
+    <summary>❤️ Favorites <span id="favCount"></span></summary>
+    <ul id="favList"></ul>
+    <p class="empty" id="favEmpty">Tap “Save” while a song plays to keep it here.</p>
+  </details>
 
   <div class="row">
     <button class="ghost" id="disconnectBtn" disabled>Disconnect speakers</button>
@@ -333,6 +363,49 @@ premiumBtn.addEventListener('click', () => {
   location.reload();
 });
 
+// ── Favorites (kept on this phone) ──────────────
+const FAV_KEY = 'hc_favs';
+let favs = [];
+try { favs = JSON.parse(safeGet(FAV_KEY) || '[]'); } catch (e) { favs = []; }
+let currentSong = null;   // { title, artist, station } shown in the Now card
+
+const favKey = s => (s.title + '\n' + s.artist).toLowerCase();
+const isFav = s => !!s && favs.some(f => favKey(f) === favKey(s));
+
+function saveFavs() { safeSet(FAV_KEY, JSON.stringify(favs)); renderFavs(); render(); }
+
+$('favBtn').addEventListener('click', () => {
+  if (!currentSong) return;
+  if (isFav(currentSong)) favs = favs.filter(f => favKey(f) !== favKey(currentSong));
+  else favs.unshift({ ...currentSong, at: Date.now() });
+  saveFavs();
+});
+
+function renderFavs() {
+  const list = $('favList');
+  list.replaceChildren();
+  $('favCount').textContent = favs.length ? '(' + favs.length + ')' : '';
+  $('favEmpty').hidden = favs.length > 0;
+  favs.forEach(f => {
+    const q = encodeURIComponent([f.artist, f.title].filter(Boolean).join(' '));
+    const li = document.createElement('li');
+    const song = document.createElement('div'); song.className = 'f-song';
+    song.textContent = [f.artist, f.title].filter(Boolean).join(' – ');
+    const meta = document.createElement('div'); meta.className = 'f-meta';
+    meta.textContent = f.station + ' · ' + new Date(f.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    const links = document.createElement('div'); links.className = 'f-links';
+    links.innerHTML =
+      `<a href="https://www.youtube.com/results?search_query=${q}" target="_blank" rel="noopener">YouTube</a>` +
+      `<a href="https://music.youtube.com/search?q=${q}" target="_blank" rel="noopener">YouTube Music</a>`;
+    const del = document.createElement('button'); del.className = 'f-del'; del.textContent = '✕';
+    del.setAttribute('aria-label', 'Remove from favorites');
+    del.addEventListener('click', () => { favs = favs.filter(x => x !== f); saveFavs(); });
+    li.append(song, del, meta, links);
+    list.appendChild(li);
+  });
+}
+renderFavs();
+
 // ── Now playing (station's public feed) ─────────
 async function pollNowPlaying() {
   if (document.hidden) return;
@@ -402,6 +475,13 @@ function render() {
   els.nowTitle.textContent = np.title || '—';
   els.nowArtist.textContent = np.artist || '';
   setArt(np.art || null);
+
+  currentSong = np.title ? { title: np.title, artist: np.artist || '', station: shown.name } : null;
+  const favBtn = $('favBtn');
+  const saved = isFav(currentSong);
+  favBtn.disabled = !currentSong;
+  favBtn.textContent = saved ? '❤️ Saved' : '🤍 Save';
+  favBtn.classList.toggle('saved', saved);
 
   let stateText = 'Not casting';
   els.nowState.classList.remove('live');
