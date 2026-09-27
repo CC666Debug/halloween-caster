@@ -71,6 +71,8 @@
   .now .artist { color: var(--muted); }
   .now .state { font-size: 13px; margin-top: 6px; color: var(--muted); }
   .now .state.live { color: var(--good); }
+  .now .next { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .now .next:empty { display: none; }
 
   .controls {
     background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
@@ -98,6 +100,7 @@
   .station.active .dot { display: inline-block; }
 
   .row { display: flex; gap: 10px; }
+  .ghost.on { border-color: var(--accent); color: var(--accent); }
   .ghost {
     flex: 1; background: none; border: 1px solid var(--line); border-radius: 12px;
     padding: 10px; color: var(--muted); font-size: 14px;
@@ -110,18 +113,18 @@
   }
   .pill.saved { border-color: var(--accent); color: var(--accent); }
 
-  .favs { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 16px; }
-  .favs summary { cursor: pointer; padding: 12px 0; font-weight: 650; }
-  .favs summary span { color: var(--muted); font-weight: 400; }
-  .favs ul { list-style: none; margin: 0 0 8px; padding: 0; }
-  .favs li { border-top: 1px solid var(--line); padding: 10px 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; }
-  .favs .f-song { font-weight: 600; overflow-wrap: anywhere; }
-  .favs .f-meta { font-size: 12px; color: var(--muted); grid-column: 1; }
-  .favs .f-links { grid-column: 1; display: flex; gap: 14px; font-size: 13px; }
-  .favs .f-links a { color: var(--accent); text-decoration: none; }
-  .favs .f-del { grid-column: 2; grid-row: 1 / span 3; align-self: center; background: none; color: var(--muted); font-size: 18px; padding: 8px; }
-  .favs .empty { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
-  .favs .empty[hidden] { display: none; }
+  .drawer { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 16px; }
+  .drawer summary { cursor: pointer; padding: 12px 0; font-weight: 650; }
+  .drawer summary span { color: var(--muted); font-weight: 400; }
+  .drawer ul { list-style: none; margin: 0 0 8px; padding: 0; }
+  .drawer li { border-top: 1px solid var(--line); padding: 10px 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; }
+  .drawer .f-song { font-weight: 600; overflow-wrap: anywhere; }
+  .drawer .f-meta { font-size: 12px; color: var(--muted); grid-column: 1; }
+  .drawer .f-links { grid-column: 1; display: flex; gap: 14px; font-size: 13px; }
+  .drawer .f-links a { color: var(--accent); text-decoration: none; }
+  .drawer .li-btn { grid-column: 2; grid-row: 1 / span 3; align-self: center; background: none; color: var(--muted); font-size: 18px; padding: 8px; }
+  .drawer .empty { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
+  .drawer .empty[hidden] { display: none; }
   footer { color: var(--muted); font-size: 12px; text-align: center; }
   footer a { color: var(--muted); }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
@@ -146,6 +149,7 @@
       <div class="title" id="nowTitle">—</div>
       <div class="artist" id="nowArtist"></div>
       <div class="state" id="nowState">Not casting</div>
+      <div class="next" id="nowNext"></div>
     </div>
     <div class="song-actions">
       <button class="pill" id="favBtn" disabled>🤍 Save</button>
@@ -154,7 +158,7 @@
   </section>
 
   <section class="controls">
-    <button class="play" id="playBtn" aria-label="Play" disabled>
+    <button class="play" id="playBtn" aria-label="Play">
       <svg viewBox="0 0 24 24" fill="currentColor" id="playIcon"><path d="M8 5v14l11-7z"/></svg>
     </button>
     <button class="icon-btn" id="muteBtn" aria-label="Mute" disabled>
@@ -166,14 +170,25 @@
 
   <section class="stations" id="stations" aria-label="Channels"></section>
 
-  <details class="favs" id="favs">
+  <details class="drawer" id="recent">
+    <summary>🕰️ Recently played <span id="recentOn"></span></summary>
+    <ul id="recentList"></ul>
+    <p class="empty" id="recentEmpty">Nothing yet. The station’s song list will show up here.</p>
+  </details>
+
+  <details class="drawer" id="favs">
     <summary>❤️ Favorites <span id="favCount"></span></summary>
     <ul id="favList"></ul>
     <p class="empty" id="favEmpty">Tap “Save” while a song plays to keep it here.</p>
   </details>
 
   <div class="row">
-    <button class="ghost" id="disconnectBtn" disabled>Disconnect speakers</button>
+    <button class="ghost" id="hereBtn" aria-pressed="false">📱 Listen here</button>
+    <button class="ghost" id="sleepBtn">🌙 Sleep: off</button>
+  </div>
+
+  <div class="row">
+    <button class="ghost" id="disconnectBtn" disabled>Disconnect</button>
     <button class="ghost" id="premiumBtn">Add Premium</button>
   </div>
 
@@ -204,7 +219,8 @@ const $ = id => document.getElementById(id);
 const els = {
   castBtn: $('castBtn'), castLabel: $('castLabel'), notice: $('notice'),
   artWrap: $('artWrap'), nowStation: $('nowStation'), nowTitle: $('nowTitle'),
-  nowArtist: $('nowArtist'), nowState: $('nowState'),
+  nowArtist: $('nowArtist'), nowState: $('nowState'), nowNext: $('nowNext'),
+  hereBtn: $('hereBtn'), sleepBtn: $('sleepBtn'),
   playBtn: $('playBtn'), playIcon: $('playIcon'), muteBtn: $('muteBtn'), muteIcon: $('muteIcon'),
   vol: $('vol'), stations: $('stations'), disconnectBtn: $('disconnectBtn'),
 };
@@ -239,7 +255,11 @@ STATIONS.forEach(s => {
 function chooseStation(s) {
   selected = s;
   safeSet('hc_station', s.id);
-  if (!ctx) { render(); return; }
+  // Already listening on the phone, or no speaker to cast to: play the channel here.
+  if (localStation || !ctx || ctx.getCastState() === cast.framework.CastState.NO_DEVICES_AVAILABLE) {
+    playHere(s);
+    return;
+  }
   if (ctx.getCurrentSession()) {
     loadStation(s);
   } else {
@@ -255,7 +275,7 @@ function chooseStation(s) {
 // ── Casting ─────────────────────────────────────
 window.__onGCastApiAvailable = function (available) {
   if (!available) {
-    showNotice('Casting isn’t available in this browser. Open this page in Chrome on Android.');
+    showNotice('Casting to speakers needs Chrome (Android or computer). You can still listen on this device: tap a channel.');
     els.castLabel.textContent = 'Unavailable';
     return;
   }
@@ -272,6 +292,8 @@ window.__onGCastApiAvailable = function (available) {
   ctx.addEventListener(cast.framework.CastContextEventType.CAST_STATE_CHANGED, render);
   ctx.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED, e => {
     const S = cast.framework.SessionState;
+    // The speaker takes over from the phone so the two don't play at once.
+    if (e.sessionState === S.SESSION_STARTED) stopHere();
     if (e.sessionState === S.SESSION_STARTED && pendingLoad) {
       const s = pendingLoad; pendingLoad = null;
       loadStation(s);
@@ -316,23 +338,27 @@ els.castBtn.addEventListener('click', () => {
   ctx.requestSession().catch(() => {});
 });
 
+const castConnected = () => !!(ctx && ctx.getCurrentSession());
+function castActive() {
+  return !!ctx && player.isMediaLoaded && !!player.playerState
+    && player.playerState !== chrome.cast.media.PlayerState.IDLE;
+}
+
 els.playBtn.addEventListener('click', () => {
-  if (!ctx) return;
-  const PS = chrome.cast.media.PlayerState;
-  const active = player.isMediaLoaded && player.playerState && player.playerState !== PS.IDLE;
-  if (active) {
-    // Live radio: stop rather than pause, so Play rejoins the broadcast at "now".
-    ctrl.stop();
-  } else {
-    chooseStation(selected);
-  }
+  // Live radio: stop rather than pause, so Play rejoins the broadcast at "now".
+  if (castActive()) ctrl.stop();
+  else if (localStation) stopHere();
+  else chooseStation(selected);
 });
 
-els.muteBtn.addEventListener('click', () => ctrl && ctrl.muteOrUnmute());
+els.muteBtn.addEventListener('click', () => {
+  if (castConnected()) ctrl.muteOrUnmute();
+  else { audio.muted = !audio.muted; render(); }
+});
 
 let volTimer = null;
 els.vol.addEventListener('input', () => {
-  if (!ctrl) return;
+  if (!castConnected()) { audio.volume = els.vol.value / 100; return; }
   clearTimeout(volTimer);
   volTimer = setTimeout(() => {
     player.volumeLevel = els.vol.value / 100;
@@ -363,6 +389,98 @@ premiumBtn.addEventListener('click', () => {
   location.reload();
 });
 
+// ── Listening on this phone ─────────────────────
+const audio = new Audio();
+audio.preload = 'none';
+let localStation = null;   // station playing through this phone, if any
+let hereLive = false;      // true once audio is actually coming out
+
+function playHere(s) {
+  selected = s;
+  localStation = s;
+  hereLive = false;
+  audio.src = s.url;
+  audio.volume = els.vol.value / 100;
+  hideNotice();
+  audio.play().catch(err => {
+    if (localStation !== s) return;
+    localStation = null;
+    showNotice('This device couldn’t play ' + s.name + ' (' + err.message + ').');
+    render();
+  });
+  render();
+}
+
+function stopHere() {
+  if (!localStation) return;
+  localStation = null;
+  hereLive = false;
+  audio.pause();
+  audio.removeAttribute('src');   // drop the buffer so the next Play starts at "now"
+  audio.load();
+  render();
+}
+
+audio.addEventListener('playing', () => { hereLive = true; render(); });
+audio.addEventListener('waiting', () => { hereLive = false; render(); });
+audio.addEventListener('error', () => {
+  if (!localStation) return;
+  const s = localStation;
+  stopHere();
+  showNotice('Lost the ' + s.name + ' stream. Tap the channel to try again.');
+});
+
+els.hereBtn.addEventListener('click', () => localStation ? stopHere() : playHere(selected));
+
+// Lock-screen / notification controls while playing on the phone.
+if ('mediaSession' in navigator) {
+  navigator.mediaSession.setActionHandler('play', () => playHere(selected));
+  navigator.mediaSession.setActionHandler('pause', stopHere);
+  navigator.mediaSession.setActionHandler('stop', stopHere);
+}
+let lastMeta = '';
+function updateMediaSession() {
+  if (!('mediaSession' in navigator) || !localStation) return;
+  const np = nowPlaying[localStation.code] || {};
+  const key = [localStation.id, np.title, np.artist, np.art].join('\n');
+  if (key === lastMeta) return;
+  lastMeta = key;
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: np.title || localStation.name,
+    artist: np.artist || '',
+    album: 'Halloween Radio · ' + localStation.name,
+    artwork: np.art ? [{ src: np.art, sizes: '512x512' }] : [],
+  });
+}
+
+// ── Sleep timer ─────────────────────────────────
+// Each tap steps to the next length; the page has to stay open for the timer to fire.
+const SLEEP_STEPS = [0, 15, 30, 60, 90];
+let sleepStep = 0;
+let sleepAt = 0;   // time to stop, in ms; 0 = off
+
+els.sleepBtn.addEventListener('click', () => {
+  sleepStep = (sleepStep + 1) % SLEEP_STEPS.length;
+  sleepAt = SLEEP_STEPS[sleepStep] ? Date.now() + SLEEP_STEPS[sleepStep] * 60000 : 0;
+  checkSleep();
+});
+
+function checkSleep() {
+  if (sleepAt && Date.now() >= sleepAt) {
+    sleepAt = 0; sleepStep = 0;
+    stopHere();
+    // Only stop the speaker if it's playing one of ours, not something else.
+    const r = remoteStation();
+    if (r && r !== 'other' && castActive()) ctrl.stop();
+  }
+  els.sleepBtn.textContent = sleepAt
+    ? '🌙 ' + Math.ceil((sleepAt - Date.now()) / 60000) + ' min left'
+    : '🌙 Sleep: off';
+  els.sleepBtn.classList.toggle('on', !!sleepAt);
+}
+setInterval(checkSleep, 15000);
+document.addEventListener('visibilitychange', checkSleep);
+
 // ── Favorites (kept on this phone) ──────────────
 const FAV_KEY = 'hc_favs';
 let favs = [];
@@ -374,12 +492,13 @@ const isFav = s => !!s && favs.some(f => favKey(f) === favKey(s));
 
 function saveFavs() { safeSet(FAV_KEY, JSON.stringify(favs)); renderFavs(); render(); }
 
-$('favBtn').addEventListener('click', () => {
-  if (!currentSong) return;
-  if (isFav(currentSong)) favs = favs.filter(f => favKey(f) !== favKey(currentSong));
-  else favs.unshift({ ...currentSong, at: Date.now() });
+function toggleFav(song) {
+  if (isFav(song)) favs = favs.filter(f => favKey(f) !== favKey(song));
+  else favs.unshift({ ...song, at: Date.now() });
   saveFavs();
-});
+}
+
+$('favBtn').addEventListener('click', () => { if (currentSong) toggleFav(currentSong); });
 
 function renderFavs() {
   const list = $('favList');
@@ -397,7 +516,7 @@ function renderFavs() {
     links.innerHTML =
       `<a href="https://www.youtube.com/results?search_query=${q}" target="_blank" rel="noopener">YouTube</a>` +
       `<a href="https://music.youtube.com/search?q=${q}" target="_blank" rel="noopener">YouTube Music</a>`;
-    const del = document.createElement('button'); del.className = 'f-del'; del.textContent = '✕';
+    const del = document.createElement('button'); del.className = 'li-btn'; del.textContent = '✕';
     del.setAttribute('aria-label', 'Remove from favorites');
     del.addEventListener('click', () => { favs = favs.filter(x => x !== f); saveFavs(); });
     li.append(song, del, meta, links);
@@ -415,11 +534,22 @@ async function pollNowPlaying() {
       if (!r.ok) return;
       const d = await r.json();
       const song = (d.now_playing && d.now_playing.song) || {};
-      nowPlaying[s.code] = { title: song.title || '', artist: song.artist || '', art: song.art || '' };
+      nowPlaying[s.code] = {
+        title: song.title || '', artist: song.artist || '', art: song.art || '',
+        next: songEntry(d.playing_next),
+        history: (d.song_history || []).map(songEntry).filter(Boolean),
+      };
     } catch (e) {}
   }));
   render();
 }
+// Real songs only: station jingles and IDs are left out of "Up next" and the history.
+function songEntry(item) {
+  const song = item && item.song;
+  if (!song || !song.title || /^(jingle|id|station id|promo|sweeper|liner)$/i.test(song.artist || '')) return null;
+  return { title: song.title, artist: song.artist || '', at: (item.played_at || 0) * 1000 };
+}
+
 setInterval(pollNowPlaying, POLL_MS);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) pollNowPlaying(); });
 pollNowPlaying();
@@ -469,12 +599,15 @@ function render() {
   const buffering = pstate === (PS && PS.BUFFERING);
   const activeRemote = remote && remote !== 'other' && pstate && pstate !== PS.IDLE ? remote : null;
 
-  const shown = activeRemote || selected;
+  const shown = activeRemote || localStation || selected;
   const np = nowPlaying[shown.code] || {};
   els.nowStation.textContent = shown.name;
   els.nowTitle.textContent = np.title || '—';
   els.nowArtist.textContent = np.artist || '';
+  els.nowNext.textContent = np.next ? 'Up next: ' + songText(np.next) : '';
   setArt(np.art || null);
+  updateMediaSession();
+  renderRecent(shown, np.history || []);
 
   currentSong = np.title ? { title: np.title, artist: np.artist || '', station: shown.name } : null;
   const favBtn = $('favBtn');
@@ -489,7 +622,10 @@ function render() {
   else if (connected && remote === 'other' && pstate && pstate !== PS.IDLE) stateText = deviceName + ' is playing something else';
   else if (connected && buffering) stateText = 'Starting on ' + deviceName + '…';
   else if (connected && playing) { stateText = 'Live on ' + deviceName; els.nowState.classList.add('live'); }
+  else if (localStation && !hereLive) stateText = 'Starting on this device…';
+  else if (localStation) { stateText = 'Playing on this device'; els.nowState.classList.add('live'); }
   else if (connected) stateText = 'Connected to ' + deviceName + ' · stopped';
+  else if (!ctx) stateText = 'Not playing';
   els.nowState.textContent = stateText;
 
   // Station highlight follows the speaker when it's playing one of ours
@@ -500,18 +636,56 @@ function render() {
   });
 
   // Transport
-  const active = !!activeRemote || (remote === 'other' && pstate && pstate !== PS.IDLE);
-  els.playBtn.disabled = !ctx;
+  const active = !!activeRemote || (remote === 'other' && pstate && pstate !== PS.IDLE) || !!localStation;
   els.playIcon.innerHTML = active ? ICONS.stop : ICONS.play;
   els.playBtn.setAttribute('aria-label', active ? 'Stop' : 'Play');
 
-  els.muteBtn.disabled = !connected;
-  els.vol.disabled = !connected;
+  els.hereBtn.textContent = localStation ? '📱 Stop listening here' : '📱 Listen here';
+  els.hereBtn.classList.toggle('on', !!localStation);
+  els.hereBtn.setAttribute('aria-pressed', String(!!localStation));
+
+  // Volume and mute follow the speaker when connected, otherwise this device.
+  els.muteBtn.disabled = !connected && !localStation;
+  els.vol.disabled = !connected && !localStation;
   els.disconnectBtn.disabled = !connected;
   if (connected && player) {
     els.muteIcon.innerHTML = player.isMuted ? ICONS.mute : ICONS.vol;
     if (document.activeElement !== els.vol && !volTimer) els.vol.value = Math.round(player.volumeLevel * 100);
+  } else if (localStation) {
+    els.muteIcon.innerHTML = audio.muted ? ICONS.mute : ICONS.vol;
   }
+}
+
+const songText = s => [s.artist, s.title].filter(Boolean).join(' – ');
+
+function timeAgo(ms) {
+  const min = Math.round((Date.now() - ms) / 60000);
+  return min < 1 ? 'just now' : min < 60 ? min + ' min ago' : Math.floor(min / 60) + ' hr ago';
+}
+
+// Recently played on the shown channel; tap the heart to keep a song in Favorites.
+let lastRecent = '';
+function renderRecent(station, history) {
+  const key = [station.id, history.length && history[0].at, favs.length, Math.floor(Date.now() / 60000)].join('|');
+  if (key === lastRecent) return;
+  lastRecent = key;
+  $('recentOn').textContent = 'on ' + station.name;
+  $('recentEmpty').hidden = history.length > 0;
+  const list = $('recentList');
+  list.replaceChildren();
+  history.forEach(h => {
+    const entry = { title: h.title, artist: h.artist, station: station.name };
+    const saved = isFav(entry);
+    const li = document.createElement('li');
+    const song = document.createElement('div'); song.className = 'f-song'; song.textContent = songText(h);
+    const meta = document.createElement('div'); meta.className = 'f-meta'; meta.textContent = timeAgo(h.at);
+    const heart = document.createElement('button'); heart.className = 'li-btn';
+    heart.textContent = saved ? '❤️' : '🤍';
+    heart.setAttribute('aria-label', saved ? 'Remove from favorites' : 'Save to favorites');
+    heart.addEventListener('click', () => toggleFav(entry));
+    li.append(song, heart, meta);
+    list.appendChild(li);
+  });
 }
 els.vol.addEventListener('change', () => setTimeout(() => { volTimer = null; }, 800));
 
