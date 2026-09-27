@@ -413,6 +413,9 @@ STATIONS.forEach(s => {
 
 // Music plays on the phone unless a speaker is connected (picked with the cast button).
 function chooseStation(s) {
+  // Tapping the channel that's already playing stops it, like the Stop button.
+  if (localStation === s) { stopHere(); return; }
+  if (castActive() && remoteStation() === s) { ctrl.stop(); return; }
   selected = s;
   safeSet('hc_station', s.id);
   if (castConnected()) { loadStation(s); render(); }

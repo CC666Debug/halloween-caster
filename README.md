@@ -6,7 +6,7 @@ A one-tap phone remote for [Halloween Radio](https://halloweenradio.net). Cast a
 
 ## What it does
 
-- **Plays on your phone, straight away.** Tap a channel (or ▶) and it plays right on your phone, with play and stop on your lock screen too. The app opens on the last channel you listened to.
+- **Plays on your phone, straight away.** Tap a channel (or ▶) and it plays right on your phone (tap the playing channel again to stop it), with play and stop on your lock screen too. The app opens on the last channel you listened to.
 - **Or cast to speakers.** Pick a Nest speaker or a whole speaker group with the cast button and the music moves there. Disconnect and it carries on on your phone without you having to do anything. Stop, volume and mute control whichever one is playing.
 - **Six channels:** Main, Oldies, Kids, Movies, Atmosphere and Instrumental, each showing the song playing now.
 - **Up next and Recently played**, so you can see what's coming and catch the name of the song you just heard.
