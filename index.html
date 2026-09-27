@@ -144,6 +144,7 @@
 
   <div class="row">
     <button class="ghost" id="disconnectBtn" disabled>Disconnect speakers</button>
+    <button class="ghost" id="premiumBtn">Add Premium</button>
   </div>
 
   <footer>Unofficial remote. Music streamed from <a href="https://halloweenradio.net" target="_blank" rel="noopener">halloweenradio.net</a>.</footer>
@@ -160,6 +161,14 @@ const STATIONS = [
 ];
 const NOW_PLAYING = code => `https://radio1.streamserver.link/api/nowplaying_static/${code}.json`;
 const POLL_MS = 15000;
+
+// Premium is for supporters: its link is pasted once and kept only on this device, never in this public code.
+const PREMIUM_KEY = 'hc_premium_url';
+const premiumUrl = safeGet(PREMIUM_KEY);
+if (premiumUrl) {
+  STATIONS.push({ id: 'premium', name: 'Premium ⭐', code: 'halloween_radio_premium', url: premiumUrl,
+                  type: /mp3/i.test(premiumUrl) ? 'audio/mpeg' : 'audio/aac' });
+}
 
 const $ = id => document.getElementById(id);
 const els = {
@@ -303,6 +312,25 @@ els.vol.addEventListener('input', () => {
 
 els.disconnectBtn.addEventListener('click', () => {
   if (ctx && ctx.getCurrentSession()) ctx.endCurrentSession(true);
+});
+
+const premiumBtn = $('premiumBtn');
+premiumBtn.textContent = premiumUrl ? 'Remove Premium' : 'Add Premium';
+premiumBtn.addEventListener('click', () => {
+  if (premiumUrl) {
+    if (confirm('Remove the Premium channel from this phone?')) {
+      try { localStorage.removeItem(PREMIUM_KEY); } catch (e) {}
+      if (selected.id === 'premium') safeSet('hc_station', 'main');
+      location.reload();
+    }
+    return;
+  }
+  const url = (prompt('Paste your Premium stream link from halloweenradio.net (supporters only). It stays on this phone.') || '').trim();
+  if (!url) return;
+  if (!/^https:\/\/\S+$/i.test(url)) { alert('That doesn’t look like a stream link. It should start with https://'); return; }
+  safeSet(PREMIUM_KEY, url);
+  safeSet('hc_station', 'premium');
+  location.reload();
 });
 
 // ── Now playing (station's public feed) ─────────
