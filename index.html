@@ -277,7 +277,7 @@
         <div class="bar"><i id="progBar"></i></div>
         <button class="prog-time" id="progTime" aria-label="Song time. Tap to change how it's shown."></button>
       </div>
-      <div class="state" id="nowState">Not casting</div>
+      <div class="state" id="nowState">Tap ▶ or a channel to listen</div>
       <div class="next" id="nowNext"></div>
     </div>
     <div class="song-actions">
@@ -312,16 +312,12 @@
   </details>
 
   <div class="row">
-    <button class="ghost" id="hereBtn" aria-pressed="false">📱 Listen here</button>
     <button class="ghost" id="sleepBtn">🌙 Sleep: off</button>
-  </div>
-
-  <div class="row">
     <button class="ghost" id="saverBtn" aria-pressed="false">📶 Data saver: off</button>
-    <button class="ghost" id="disconnectBtn" disabled>Disconnect</button>
   </div>
 
   <div class="row">
+    <button class="ghost" id="disconnectBtn" disabled>Disconnect</button>
     <button class="ghost" id="premiumBtn">Add Premium</button>
   </div>
 
@@ -382,7 +378,7 @@ const els = {
   castBtn: $('castBtn'), castLabel: $('castLabel'), notice: $('notice'),
   artWrap: $('artWrap'), nowStation: $('nowStation'), nowTitle: $('nowTitle'),
   nowArtist: $('nowArtist'), nowState: $('nowState'), nowNext: $('nowNext'),
-  hereBtn: $('hereBtn'), sleepBtn: $('sleepBtn'),
+  sleepBtn: $('sleepBtn'),
   playBtn: $('playBtn'), playIcon: $('playIcon'), muteBtn: $('muteBtn'), muteIcon: $('muteIcon'),
   vol: $('vol'), stations: $('stations'), disconnectBtn: $('disconnectBtn'),
 };
@@ -396,7 +392,7 @@ const ICONS = {
 
 // ── State ────────────────────────────────────────
 let selected = STATIONS.find(s => s.id === safeGet('hc_station')) || STATIONS[0];
-let pendingLoad = null;   // station to load once a session connects
+let carryOver = null;     // station the speaker was playing when it disconnected, to continue on the phone
 let shownStation = null;  // channel shown in the Now card (drives progress and polling)
 const nowPlaying = {};    // code -> { title, artist, art }
 let ctx = null, player = null, ctrl = null;
@@ -415,31 +411,19 @@ STATIONS.forEach(s => {
   els.stations.appendChild(b);
 });
 
+// Music plays on the phone unless a speaker is connected (picked with the cast button).
 function chooseStation(s) {
   selected = s;
   safeSet('hc_station', s.id);
-  // Already listening on the phone, or no speaker to cast to: play the channel here.
-  if (localStation || !ctx || ctx.getCastState() === cast.framework.CastState.NO_DEVICES_AVAILABLE) {
-    playHere(s);
-    return;
-  }
-  if (ctx.getCurrentSession()) {
-    loadStation(s);
-  } else {
-    pendingLoad = s;
-    ctx.requestSession().catch(err => {
-      pendingLoad = null;
-      if (err !== 'cancel') showNotice('Couldn’t connect to the speaker (' + err + '). Try again.');
-    });
-  }
-  render();
+  if (castConnected()) { loadStation(s); render(); }
+  else playHere(s);
 }
 
 // ── Casting ─────────────────────────────────────
 window.__onGCastApiAvailable = function (available) {
   // The cast library can half-load when offline, so check the framework is really there.
   if (!available || !window.cast || !cast.framework) {
-    if (navigator.onLine) showNotice('Casting to speakers needs Chrome (Android or computer). You can still listen on this device: tap a channel.');
+    if (navigator.onLine) showNotice('Casting to speakers needs Chrome (Android or computer). Listening on this device works everywhere.');
     els.castLabel.textContent = 'Unavailable';
     return;
   }
@@ -456,15 +440,24 @@ window.__onGCastApiAvailable = function (available) {
   ctx.addEventListener(cast.framework.CastContextEventType.CAST_STATE_CHANGED, render);
   ctx.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED, e => {
     const S = cast.framework.SessionState;
-    // The speaker takes over from the phone so the two don't play at once.
-    if (e.sessionState === S.SESSION_STARTED) stopHere();
-    if (e.sessionState === S.SESSION_STARTED && pendingLoad) {
-      const s = pendingLoad; pendingLoad = null;
+    // A speaker was picked: whatever the phone was playing moves over to it.
+    if (e.sessionState === S.SESSION_STARTED && localStation) {
+      const s = localStation;
+      stopHere();
       loadStation(s);
     }
     if (e.sessionState === S.SESSION_START_FAILED) {
-      pendingLoad = null;
       showNotice('The speaker didn’t accept the connection. Try again.');
+    }
+    // Disconnecting carries the music back to the phone (unless the speaker was stopped).
+    if (e.sessionState === S.SESSION_ENDING) {
+      const r = remoteStation();
+      carryOver = r && r !== 'other' && castActive() ? r : null;
+    }
+    if (e.sessionState === S.SESSION_ENDED && carryOver) {
+      const s = carryOver;
+      carryOver = null;
+      playHere(s);
     }
     render();
   });
@@ -665,7 +658,6 @@ saverBtn.addEventListener('click', () => {
 });
 renderSaver();
 
-els.hereBtn.addEventListener('click', () => localStation ? stopHere() : playHere(selected));
 
 // Lock-screen / notification controls while playing on the phone.
 if ('mediaSession' in navigator) {
@@ -1064,16 +1056,15 @@ function render() {
   favBtn.textContent = saved ? '❤️ Saved' : '🤍 Save';
   favBtn.classList.toggle('saved', saved);
 
-  let stateText = 'Not casting';
+  let stateText = 'Tap ▶ or a channel to listen';
   els.nowState.classList.remove('live');
-  if (pendingLoad || (castState === (CS && CS.CONNECTING))) stateText = 'Connecting to speaker…';
+  if (castState === (CS && CS.CONNECTING)) stateText = 'Connecting to speaker…';
   else if (connected && remote === 'other' && pstate && pstate !== PS.IDLE) stateText = deviceName + ' is playing something else';
   else if (connected && buffering) stateText = 'Starting on ' + deviceName + '…';
   else if (connected && playing) { stateText = 'Live on ' + deviceName; els.nowState.classList.add('live'); }
   else if (localStation && !hereLive) stateText = 'Starting on this device…';
   else if (localStation) { stateText = 'Playing on this device'; els.nowState.classList.add('live'); }
   else if (connected) stateText = 'Connected to ' + deviceName + ' · stopped';
-  else if (!ctx) stateText = 'Not playing';
   els.nowState.textContent = stateText;
 
   // Station highlight follows the speaker when it's playing one of ours
@@ -1091,9 +1082,6 @@ function render() {
   els.playIcon.innerHTML = active ? ICONS.stop : ICONS.play;
   els.playBtn.setAttribute('aria-label', active ? 'Stop' : 'Play');
 
-  els.hereBtn.textContent = localStation ? '📱 Stop listening here' : '📱 Listen here';
-  els.hereBtn.classList.toggle('on', !!localStation);
-  els.hereBtn.setAttribute('aria-pressed', String(!!localStation));
 
   // Volume and mute follow the speaker when connected, otherwise this device.
   els.muteBtn.disabled = !connected && !localStation;
