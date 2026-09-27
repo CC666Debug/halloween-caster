@@ -14,7 +14,9 @@ A one-tap phone remote for [Halloween Radio](https://halloweenradio.net). Cast a
 - **Data saver.** Listening on your phone away from Wi-Fi? Switch to the 64 kbps version and use half the data. If a stream won't play, the app quietly tries the other version.
 - **Favorites.** Save a song (from Now playing or Recently played) and find it later on YouTube or YouTube Music.
 - **Sleep timer.** Stop the music after 15, 30, 60 or 90 minutes.
-- **Premium channel** for Halloween Radio supporters: paste your own stream link once. It is kept on your phone only.
+- **Halloween countdown.** Days until October 31 at the top. Tap it for bats. On Halloween itself, the bats come out on their own. 🦇
+- **Opens instantly, even offline.** Add it to your home screen and it opens straight away, even with no signal. The music comes back as soon as you reconnect.
+- **Premium channel** for Halloween Radio supporters: paste your own stream link once. The app tests it before saving, and it is kept on your phone only.
 
 ## Which browser to use
 

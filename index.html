@@ -134,6 +134,40 @@
   .drawer .empty[hidden] { display: none; }
   footer { color: var(--muted); font-size: 12px; text-align: center; }
   footer a { color: var(--muted); }
+  .countdown {
+    background: none; border: 0; padding: 0; margin: -6px auto 0; display: block;
+    color: var(--accent); font-size: 14px; font-weight: 600;
+  }
+  .bat {
+    position: fixed; top: 0; left: -60px; z-index: 10; pointer-events: none; font-size: 30px;
+    animation: fly var(--dur, 6s) linear forwards;
+  }
+  @keyframes fly {
+    0%   { transform: translate(0, var(--y0)) rotate(-8deg); }
+    25%  { transform: translate(28vw, calc(var(--y0) - 40px)) rotate(8deg); }
+    50%  { transform: translate(56vw, calc(var(--y0) + 30px)) rotate(-8deg); }
+    75%  { transform: translate(84vw, calc(var(--y0) - 30px)) rotate(8deg); }
+    100% { transform: translate(calc(100vw + 120px), var(--y0)) rotate(-8deg); }
+  }
+
+  dialog {
+    width: min(440px, calc(100vw - 32px)); padding: 20px; border-radius: var(--radius);
+    background: var(--surface); color: var(--text); border: 1px solid var(--line);
+  }
+  dialog::backdrop { background: rgba(0, 0, 0, .6); }
+  dialog h2 { margin: 0 0 8px; font-size: 18px; }
+  dialog p { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+  dialog input {
+    width: 100%; font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 10px;
+    background: var(--bg); color: var(--text); border: 1px solid var(--line);
+  }
+  dialog input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  dialog .msg { min-height: 20px; margin: 10px 0 0; font-size: 14px; }
+  dialog .msg.bad { color: var(--warn); }
+  dialog .msg.good { color: var(--good); }
+  dialog .row { margin-top: 14px; }
+  dialog .primary { flex: 1; border-radius: 12px; padding: 10px; background: var(--accent); color: var(--accent-ink); font-weight: 650; }
+  dialog [hidden] { display: none; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
 </head>
@@ -146,6 +180,7 @@
       <span id="castLabel">Loading…</span>
     </button>
   </header>
+  <button class="countdown" id="countdown" hidden aria-label="Halloween countdown. Tap for bats."></button>
 
   <div class="notice" id="notice" hidden></div>
 
@@ -206,6 +241,23 @@
 
   <footer>Unofficial remote. Music streamed from <a href="https://halloweenradio.net" target="_blank" rel="noopener">halloweenradio.net</a>.</footer>
 </main>
+
+<dialog id="premiumDlg">
+  <form method="dialog" id="premiumForm" novalidate>
+    <h2>⭐ Premium channel</h2>
+    <div id="premiumAdd">
+      <p>For Halloween Radio supporters. Paste your Premium stream link from halloweenradio.net. It stays on this phone and is never shared.</p>
+      <label class="sr" for="premiumUrl">Premium stream link</label>
+      <input id="premiumUrl" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…">
+    </div>
+    <p id="premiumHave" hidden>Premium is set up on this phone. Removing it only deletes the link from this phone.</p>
+    <p class="msg" id="premiumMsg" role="status"></p>
+    <div class="row">
+      <button class="ghost" value="cancel" formnovalidate>Cancel</button>
+      <button class="primary" id="premiumGo" value="go">Test &amp; save</button>
+    </div>
+  </form>
+</dialog>
 
 <script>
 const STATIONS = [
@@ -298,8 +350,9 @@ function chooseStation(s) {
 
 // ── Casting ─────────────────────────────────────
 window.__onGCastApiAvailable = function (available) {
-  if (!available) {
-    showNotice('Casting to speakers needs Chrome (Android or computer). You can still listen on this device: tap a channel.');
+  // The cast library can half-load when offline, so check the framework is really there.
+  if (!available || !window.cast || !cast.framework) {
+    if (navigator.onLine) showNotice('Casting to speakers needs Chrome (Android or computer). You can still listen on this device: tap a channel.');
     els.castLabel.textContent = 'Unavailable';
     return;
   }
@@ -399,22 +452,65 @@ els.disconnectBtn.addEventListener('click', () => {
 });
 
 const premiumBtn = $('premiumBtn');
-premiumBtn.textContent = premiumUrl ? 'Remove Premium' : 'Add Premium';
+const premiumDlg = $('premiumDlg');
+const premiumMsg = $('premiumMsg');
+const premiumGo = $('premiumGo');
+premiumBtn.textContent = premiumUrl ? '⭐ Premium: on' : 'Add Premium';
+premiumBtn.classList.toggle('on', !!premiumUrl);
+
+let premiumFailed = '';   // a link that failed the test; tapping again saves it anyway
+
 premiumBtn.addEventListener('click', () => {
-  if (premiumUrl) {
-    if (confirm('Remove the Premium channel from this phone?')) {
-      try { localStorage.removeItem(PREMIUM_KEY); } catch (e) {}
-      if (selected.id === 'premium') safeSet('hc_station', 'main');
-      location.reload();
-    }
-    return;
-  }
-  const url = (prompt('Paste your Premium stream link from halloweenradio.net (supporters only). It stays on this phone.') || '').trim();
-  if (!url) return;
-  if (!/^https:\/\/\S+$/i.test(url)) { alert('That doesn’t look like a stream link. It should start with https://'); return; }
+  $('premiumAdd').hidden = !!premiumUrl;
+  $('premiumHave').hidden = !premiumUrl;
+  premiumGo.textContent = premiumUrl ? 'Remove Premium' : 'Test & save';
+  $('premiumUrl').value = '';
+  premiumMsg.textContent = ''; premiumMsg.className = 'msg';
+  premiumFailed = '';
+  premiumDlg.showModal();
+});
+
+// Tries the link for up to 10 seconds; resolves true once audio starts arriving.
+function testStream(url) {
+  return new Promise(resolve => {
+    const a = new Audio();
+    const done = ok => { clearTimeout(timer); a.removeAttribute('src'); a.load(); resolve(ok); };
+    const timer = setTimeout(() => done(false), 10000);
+    a.addEventListener('canplay', () => done(true), { once: true });
+    a.addEventListener('error', () => done(false), { once: true });
+    a.preload = 'auto';
+    a.src = url;
+    a.load();
+  });
+}
+
+function savePremium(url) {
   safeSet(PREMIUM_KEY, url);
   safeSet('hc_station', 'premium');
   location.reload();
+}
+
+$('premiumForm').addEventListener('submit', async e => {
+  if (e.submitter && e.submitter.value === 'cancel') return;   // let the dialog close
+  e.preventDefault();
+  if (premiumUrl) {
+    try { localStorage.removeItem(PREMIUM_KEY); } catch (err) {}
+    if (selected.id === 'premium') safeSet('hc_station', 'main');
+    location.reload();
+    return;
+  }
+  const url = $('premiumUrl').value.trim();
+  const say = (text, cls) => { premiumMsg.textContent = text; premiumMsg.className = 'msg ' + (cls || ''); };
+  if (!/^https:\/\/\S+$/i.test(url)) { say('That doesn’t look like a stream link. It should start with https://', 'bad'); return; }
+  if (url === premiumFailed) { savePremium(url); return; }
+  premiumGo.disabled = true;
+  say('Testing the link…');
+  const ok = await testStream(url);
+  premiumGo.disabled = false;
+  if (ok) { say('It plays! Saving…', 'good'); setTimeout(() => savePremium(url), 600); return; }
+  premiumFailed = url;
+  premiumGo.textContent = 'Save anyway';
+  say('Couldn’t play that link. Check it was copied in full, or tap “Save anyway” if the stream might just be down.', 'bad');
 });
 
 // ── Listening on this phone ─────────────────────
@@ -628,6 +724,57 @@ setInterval(updateProgress, 1000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) pollNowPlaying(); });
 pollNowPlaying();
 
+// ── Halloween countdown and bats ────────────────
+const countdownEl = $('countdown');
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function daysToHalloween() {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let h = new Date(now.getFullYear(), 9, 31);
+  if (today > h) h = new Date(now.getFullYear() + 1, 9, 31);
+  return Math.round((h - today) / 86400000);
+}
+
+function renderCountdown() {
+  const d = daysToHalloween();
+  countdownEl.textContent = d === 0 ? '🎃 Happy Halloween! 🦇'
+    : d === 1 ? '🎃 Halloween is tomorrow!'
+    : '🎃 ' + d + ' days until Halloween';
+  countdownEl.hidden = false;
+}
+
+function flyBats(count = 5) {
+  if (reduceMotion) return;
+  for (let i = 0; i < count; i++) {
+    const bat = document.createElement('span');
+    bat.className = 'bat';
+    bat.textContent = '🦇';
+    bat.setAttribute('aria-hidden', 'true');
+    bat.style.setProperty('--y0', (10 + Math.random() * 60) + 'vh');
+    bat.style.setProperty('--dur', (4 + Math.random() * 3) + 's');
+    bat.style.animationDelay = (i * 0.5 + Math.random() * 0.4) + 's';
+    bat.addEventListener('animationend', () => bat.remove());
+    document.body.appendChild(bat);
+  }
+}
+
+countdownEl.addEventListener('click', () => flyBats());   // bats any time you tap the countdown
+renderCountdown();
+setInterval(renderCountdown, 60000);
+// On Halloween itself, bats fly by on open and every couple of minutes.
+if (daysToHalloween() === 0) {
+  setTimeout(flyBats, 1200);
+  setInterval(() => { if (!document.hidden && daysToHalloween() === 0) flyBats(3); }, 120000);
+}
+
+// ── Offline ─────────────────────────────────────
+const showOffline = () => showNotice('You’re offline. The music and song info will come back when you reconnect.');
+window.addEventListener('offline', showOffline);
+if (!navigator.onLine) showOffline();
+window.addEventListener('online', () => { hideNotice(); pollNowPlaying(); });
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
 // ── Rendering ───────────────────────────────────
 function showNotice(msg) { els.notice.textContent = msg; els.notice.hidden = false; }
 function hideNotice() { els.notice.hidden = true; }
@@ -775,6 +922,6 @@ els.vol.addEventListener('change', () => setTimeout(() => { volTimer = null; }, 
 
 render();
 </script>
-<script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
+<script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1" onerror="window.__onGCastApiAvailable(false)"></script>
 </body>
 </html>
