@@ -829,7 +829,8 @@ const FLYERS = {
     </svg>`,
   },
   witches: {
-    count: 2, w: [120, 150], dur: [6.5, 8], y: [14, 40], dy: -70, bob: 'float 1.1s ease-in-out infinite alternate',
+    // A coven at different distances: one close lead witch and smaller, farther ones.
+    count: 5, w: [130, 150], dur: [6.5, 8], y: [8, 48], dy: -70, depth: [1, .72, .56, .46, .38], bob: 'float 1.1s ease-in-out infinite alternate',
     svg: `<svg viewBox="0 -4 140 84" aria-hidden="true">
       <circle class="spark" cx="6" cy="52" r="2" fill="#ffcf5c"/>
       <circle class="spark" cx="12" cy="66" r="1.6" fill="#ffcf5c"/>
@@ -856,6 +857,10 @@ const FLOCK_ORDER = ['bats', 'pumpkins', 'ghosts', 'witches'];
 let nextFlock = Math.floor(Math.random() * FLOCK_ORDER.length);
 
 const between = ([a, b]) => a + Math.random() * (b - a);
+const shuffle = a => {
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+};
 
 function flyBats(count) {
   if (reduceMotion) return;
@@ -863,16 +868,22 @@ function flyBats(count) {
   nextFlock = (nextFlock + 1) % FLOCK_ORDER.length;
   const f = FLYERS[name];
   const n = count ? Math.min(count, f.count) : f.count;
+  // Groups with depth get a size each (1 = nearest) and their own height band, both shuffled.
+  const depths = f.depth && shuffle(f.depth.slice());
+  const bands = f.depth && shuffle(f.depth.map((_, k) => k / (f.depth.length - 1)));
   for (let i = 0; i < n; i++) {
+    const near = depths ? depths[i] : 1;
     const el = document.createElement('div');
     el.className = 'flyer fly-' + name;
     el.setAttribute('aria-hidden', 'true');
-    const y0 = between(f.y);
-    el.style.setProperty('--w', Math.round(between(f.w)) + 'px');
+    const y0 = bands ? f.y[0] + (f.y[1] - f.y[0]) * bands[i] + (Math.random() * 4 - 2) : between(f.y);
+    el.style.setProperty('--w', Math.round(between(f.w) * near) + 'px');
     el.style.setProperty('--y0', y0 + 'vh');
-    if (f.dy) el.style.setProperty('--y1', 'calc(' + y0 + 'vh + ' + Math.round(f.dy * (0.5 + Math.random())) + 'px)');
-    el.style.setProperty('--dur', between(f.dur).toFixed(2) + 's');
-    el.style.setProperty('--delay', (i * 0.6 + Math.random() * 0.5).toFixed(2) + 's');
+    if (f.dy) el.style.setProperty('--y1', 'calc(' + y0 + 'vh + ' + Math.round(f.dy * near * (0.5 + Math.random())) + 'px)');
+    // Farther flyers look slower, fainter, and pass behind nearer ones.
+    el.style.setProperty('--dur', (between(f.dur) * (1 + (1 - near) * 0.9)).toFixed(2) + 's');
+    el.style.setProperty('--delay', (i * (depths ? 0.8 : 0.6) + Math.random() * 0.5).toFixed(2) + 's');
+    if (depths) { el.style.opacity = (0.45 + 0.55 * near).toFixed(2); el.style.zIndex = 5 + Math.round(near * 5); }
     if (f.bob) el.style.setProperty('--bob', f.bob);
     el.innerHTML = '<div class="bob">' + f.svg + '</div>';
     // Stagger the flapping, spinning and bobbing so the group doesn't move in lockstep.
