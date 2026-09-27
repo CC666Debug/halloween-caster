@@ -356,6 +356,7 @@ const ICONS = {
 // ── State ────────────────────────────────────────
 let selected = STATIONS.find(s => s.id === safeGet('hc_station')) || STATIONS[0];
 let pendingLoad = null;   // station to load once a session connects
+let shownStation = null;  // channel shown in the Now card (drives progress and polling)
 const nowPlaying = {};    // code -> { title, artist, art }
 let ctx = null, player = null, ctrl = null;
 
@@ -719,11 +720,22 @@ function renderFavs() {
 renderFavs();
 
 // ── Now playing (station's public feed) ─────────
+// The channel on screen is checked every 15 seconds and the others once a minute:
+// 9 requests a minute instead of 24, to go easy on the station's server.
+const OTHERS_EVERY = 4;   // poll rounds between checks of the other channels
+let pollRound = 0;
 let lastPoll = 0;
-async function pollNowPlaying() {
+
+function pollNowPlaying(all = false) {
+  const everyone = all || pollRound % OTHERS_EVERY === 0;
+  pollRound = everyone ? 1 : pollRound + 1;   // a full check restarts the count
+  return pollStations(everyone ? STATIONS : [shownStation || selected]);
+}
+
+async function pollStations(list) {
   if (document.hidden) return;
   lastPoll = Date.now();
-  await Promise.all(STATIONS.map(async s => {
+  await Promise.all(list.map(async s => {
     try {
       const r = await fetch(NOW_PLAYING(s.code), { cache: 'no-store' });
       if (!r.ok) return;
@@ -750,7 +762,7 @@ function songEntry(item) {
   return { title: song.title, artist: song.artist || '', at: (item.played_at || 0) * 1000 };
 }
 
-setInterval(pollNowPlaying, POLL_MS);
+setInterval(() => pollNowPlaying(), POLL_MS);
 
 // Song progress, ticking every second; when a song runs out, check for the next one right away.
 const clock = sec => Math.floor(sec / 60) + ':' + String(Math.floor(sec % 60)).padStart(2, '0');
@@ -763,11 +775,11 @@ function updateProgress() {
   const shownSec = Math.min(Math.max(elapsed, 0), np.duration);
   $('progBar').style.width = (shownSec / np.duration * 100) + '%';
   $('progTime').textContent = clock(shownSec) + ' / ' + clock(np.duration);
-  if (elapsed > np.duration + 3 && Date.now() - lastPoll > 5000) pollNowPlaying();
+  if (elapsed > np.duration + 3 && Date.now() - lastPoll > 5000) pollStations([shownStation]);
 }
 setInterval(updateProgress, 1000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) pollNowPlaying(); });
-pollNowPlaying();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) pollNowPlaying(true); });
+pollNowPlaying(true);
 
 // ── Halloween countdown and bats ────────────────
 const countdownEl = $('countdown');
@@ -908,7 +920,7 @@ if (daysToHalloween() === 0) {
 const showOffline = () => showNotice('You’re offline. The music and song info will come back when you reconnect.');
 window.addEventListener('offline', showOffline);
 if (!navigator.onLine) showOffline();
-window.addEventListener('online', () => { hideNotice(); pollNowPlaying(); });
+window.addEventListener('online', () => { hideNotice(); pollNowPlaying(true); });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
 // ── Rendering ───────────────────────────────────
@@ -916,7 +928,6 @@ function showNotice(msg) { els.notice.textContent = msg; els.notice.hidden = fal
 function hideNotice() { els.notice.hidden = true; }
 
 let lastArt = null;
-let shownStation = null;   // channel shown in the Now card (drives the progress bar)
 function setArt(url) {
   if (url === lastArt) return;
   lastArt = url;
@@ -965,7 +976,12 @@ function render() {
     np.dj ? '🔴 Live with ' + np.dj : '',
     np.listeners != null ? '👥 ' + np.listeners + ' listening' : '',
   ].filter(Boolean).join(' · ');
-  if (shownStation !== shown) { shownStation = shown; updateProgress(); }
+  if (shownStation !== shown) {
+    const first = !shownStation;
+    shownStation = shown;
+    updateProgress();
+    if (!first) pollStations([shown]);
+  }
   els.nowTitle.textContent = np.title || '—';
   els.nowArtist.textContent = np.artist || '';
   els.nowNext.textContent = np.next ? 'Up next: ' + songText(np.next) : '';
