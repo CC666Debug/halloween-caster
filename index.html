@@ -105,7 +105,7 @@
     background: var(--accent); color: var(--accent-ink); display: grid; place-items: center;
   }
   .play svg { width: 26px; height: 26px; }
-  .icon-btn { background: none; padding: 6px; display: grid; place-items: center; color: var(--muted); }
+  .icon-btn { background: none; padding: 10px; display: grid; place-items: center; color: var(--muted); }
   .icon-btn svg { width: 24px; height: 24px; }
   input[type=range] { flex: 1; accent-color: var(--accent); height: 28px; min-width: 0; }
 
@@ -134,8 +134,10 @@
     flex: 1; background: none; border: 1px solid var(--line); border-radius: 12px;
     padding: 10px; color: var(--muted); font-size: 14px;
   }
-  .song-actions { grid-column: 1 / -1; display: flex; gap: 8px; }
+  .song-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+  .song-actions #bewitchLink { flex-basis: 100%; }
   .pill {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
     flex: 1; text-align: center; text-decoration: none; font-size: 14px;
     background: var(--surface-2); border: 1px solid var(--line); color: var(--text);
     border-radius: 999px; padding: 9px 10px;
@@ -235,6 +237,9 @@
   dialog .row { margin-top: 14px; }
   dialog .primary { flex: 1; border-radius: 12px; padding: 10px; background: var(--accent); color: var(--accent-ink); font-weight: 650; }
   dialog [hidden] { display: none; }
+  button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
 </head>
@@ -251,7 +256,8 @@
 
   <div class="notice" id="notice" hidden></div>
 
-  <section class="now" aria-live="polite">
+  <section class="now">
+    <div class="sr" id="announce" aria-live="polite"></div>
     <div id="artWrap"><div class="art-fallback">🦇</div></div>
     <div>
       <div class="label" id="nowStation">Pick a channel</div>
@@ -275,13 +281,14 @@
           </g>
         </svg>
         <div class="bar"><i id="progBar"></i></div>
-        <button class="prog-time" id="progTime" aria-label="Song time. Tap to change how it's shown."></button>
+        <button class="prog-time" id="progTime"></button>
       </div>
       <div class="state" id="nowState">Tap ▶ or a channel to listen</div>
       <div class="next" id="nowNext"></div>
     </div>
     <div class="song-actions">
       <button class="pill" id="favBtn" disabled>🤍 Save</button>
+      <button class="pill" id="shareBtn" disabled>📤 Share</button>
       <a class="pill" id="bewitchLink" href="https://halloweenradio.net/playlist" target="_blank" rel="noopener">👻 Bewitch on site</a>
     </div>
   </section>
@@ -361,7 +368,12 @@ const POLL_MS = 15000;
 // Data saver plays the 64 kbps version on this device (half the data of 128 kbps MP3).
 // Speakers always get full quality, since they're on Wi-Fi.
 let dataSaver = safeGet('hc_saver') === '1';
-const streamFor = s => dataSaver && s.lite ? { url: s.lite, type: 'audio/aac' } : { url: s.url, type: s.type };
+// It also switches on by itself when the phone reports a weak connection, or after repeated drops.
+const net = navigator.connection;
+const weakSignal = () => !!net && (net.saveData || /2g|3g/.test(net.effectiveType || ''));
+let autoLite = false;   // light stream picked automatically after repeated drops
+const useLite = () => dataSaver || autoLite || weakSignal();
+const streamFor = s => useLite() && s.lite ? { url: s.lite, type: 'audio/aac' } : { url: s.url, type: s.type };
 // The other version of the same channel, used as a backup if one won't play.
 const backupFor = (s, url) => !s.lite ? null : url === s.lite ? { url: s.url, type: s.type } : { url: s.lite, type: 'audio/aac' };
 
@@ -393,6 +405,10 @@ const ICONS = {
 // ── State ────────────────────────────────────────
 let selected = STATIONS.find(s => s.id === safeGet('hc_station')) || STATIONS[0];
 let carryOver = null;     // station the speaker was playing when it disconnected, to continue on the phone
+let speakerLoading = null; // station we've asked the speaker to start, until it's actually playing
+let speakerStation = null; // our station the speaker was last playing (for reconnecting)
+let speakerRetries = 0;
+let speakerReconnecting = false;
 let shownStation = null;  // channel shown in the Now card (drives progress and polling)
 const nowPlaying = {};    // code -> { title, artist, art }
 let ctx = null, player = null, ctrl = null;
@@ -439,7 +455,7 @@ window.__onGCastApiAvailable = function (available) {
   player = new cast.framework.RemotePlayer();
   ctrl = new cast.framework.RemotePlayerController(player);
 
-  ctrl.addEventListener(cast.framework.RemotePlayerEventType.ANY_CHANGE, render);
+  ctrl.addEventListener(cast.framework.RemotePlayerEventType.ANY_CHANGE, () => { onSpeakerState(); render(); });
   ctx.addEventListener(cast.framework.CastContextEventType.CAST_STATE_CHANGED, render);
   ctx.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED, e => {
     const S = cast.framework.SessionState;
@@ -457,6 +473,7 @@ window.__onGCastApiAvailable = function (available) {
       const r = remoteStation();
       carryOver = r && r !== 'other' && castActive() ? r : null;
     }
+    if (e.sessionState === S.SESSION_ENDED) { speakerLoading = speakerStation = null; speakerReconnecting = false; }
     if (e.sessionState === S.SESSION_ENDED && carryOver) {
       const s = carryOver;
       carryOver = null;
@@ -483,11 +500,45 @@ function loadStation(s, stream = { url: s.url, type: s.type }, isBackup = false)
   const req = new chrome.cast.media.LoadRequest(info);
   req.autoplay = true;
   hideNotice();
+  speakerLoading = s;
   session.loadMedia(req).catch(err => {
     const backup = !isBackup && backupFor(s, stream.url);
-    if (backup) loadStation(s, backup, true);
-    else showNotice('The speaker couldn’t start ' + s.name + ' (' + err + ').');
+    if (backup) { loadStation(s, backup, true); return; }
+    speakerLoading = null;
+    showNotice('The speaker couldn’t start ' + s.name + ' (' + err + ').');
+    render();
   });
+}
+
+// Watches the speaker: notes when it's really playing, and restarts the channel if its stream drops.
+let lastSpeakerState = null;
+function onSpeakerState() {
+  const PS = chrome.cast.media.PlayerState;
+  if (player.playerState === lastSpeakerState) return;
+  lastSpeakerState = player.playerState;
+  if (player.playerState === PS.PLAYING) {
+    const r = remoteStation();
+    speakerLoading = null;
+    speakerRetries = 0;
+    speakerReconnecting = false;
+    speakerStation = r && r !== 'other' ? r : null;
+    return;
+  }
+  if (player.playerState !== PS.IDLE || !speakerStation) return;
+  const session = ctx.getCurrentSession();
+  const media = session && session.getMediaSession && session.getMediaSession();
+  const IR = chrome.cast.media.IdleReason;
+  const dropped = media && IR && (media.idleReason === IR.ERROR || media.idleReason === IR.FINISHED);
+  if (!dropped || speakerRetries >= 4) { speakerStation = null; speakerReconnecting = false; return; }
+  // Live radio never "finishes", so this is a dropped stream: try again with growing gaps.
+  speakerRetries++;
+  speakerReconnecting = true;
+  const s = speakerStation;
+  setTimeout(() => {
+    speakerReconnecting = false;
+    if (castConnected() && !castActive()) loadStation(s);
+    render();
+  }, 2000 * speakerRetries);
 }
 
 // Which of our stations is the speaker actually playing right now?
@@ -602,12 +653,42 @@ audio.preload = 'none';
 let localStation = null;   // station playing through this phone, if any
 let hereLive = false;      // true once audio is actually coming out
 let triedBackup = false;   // already switched to the other version once for this play
+let reconnecting = false;  // false, true, or 'offline' (waiting for the signal to come back)
+let retry = 0, retryTimer = null, stallTimer = null;
+const RETRY_DELAYS = [1, 2, 4, 8, 15, 30];   // seconds between tries; then every 30 seconds
+
+function clearRetry() {
+  clearTimeout(retryTimer); clearTimeout(stallTimer);
+  retryTimer = stallTimer = null;
+}
+
+// The stream dropped or stalled: reconnect (at "now", since it's live radio), with growing gaps.
+function reconnectHere() {
+  clearRetry();
+  if (!localStation) return;
+  hereLive = false;
+  if (!navigator.onLine) { reconnecting = 'offline'; render(); return; }   // the 'online' event picks it up
+  const delay = RETRY_DELAYS[Math.min(retry, RETRY_DELAYS.length - 1)] * 1000;
+  retry++;
+  if (retry >= 2) autoLite = true;   // keeps dropping: use the lighter stream
+  reconnecting = true;
+  render();
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    if (!localStation) return;
+    audio.src = streamFor(localStation).url;
+    audio.play().catch(() => {});
+    stallTimer = setTimeout(reconnectHere, 10000);   // still nothing after 10 seconds: try again
+    renderSaver();
+  }, delay);
+}
 
 function playHere(s) {
   selected = s;
   localStation = s;
   hereLive = false;
   triedBackup = false;
+  clearRetry(); retry = 0; reconnecting = false;
   audio.src = streamFor(s).url;
   audio.volume = els.vol.value / 100;
   hideNotice();
@@ -625,16 +706,30 @@ function stopHere() {
   if (!localStation) return;
   localStation = null;
   hereLive = false;
+  clearRetry(); retry = 0; reconnecting = false; autoLite = false;
+  renderSaver();
   audio.pause();
   audio.removeAttribute('src');   // drop the buffer so the next Play starts at "now"
   audio.load();
   render();
 }
 
-audio.addEventListener('playing', () => { hereLive = true; render(); });
-audio.addEventListener('waiting', () => { hereLive = false; render(); });
+audio.addEventListener('playing', () => {
+  hereLive = true;
+  clearRetry(); retry = 0; reconnecting = false;
+  render();
+});
+// Music ran out mid-play (weak signal): give it 8 seconds to catch up, then reconnect.
+const stalled = () => {
+  if (!localStation || stallTimer || retryTimer) return;
+  hereLive = false;
+  stallTimer = setTimeout(reconnectHere, 8000);
+  render();
+};
+audio.addEventListener('waiting', stalled);
+audio.addEventListener('stalled', stalled);
 audio.addEventListener('error', () => {
-  if (!localStation) return;
+  if (!localStation || retryTimer) return;   // nothing playing, or already waiting to reconnect
   const s = localStation;
   const backup = !triedBackup && backupFor(s, audio.src);
   if (backup) {
@@ -643,14 +738,14 @@ audio.addEventListener('error', () => {
     audio.play().catch(() => {});
     return;
   }
-  stopHere();
-  showNotice('Lost the ' + s.name + ' stream. Tap the channel to try again.');
+  reconnectHere();
 });
 
 const saverBtn = $('saverBtn');
 function renderSaver() {
-  saverBtn.textContent = '📶 Data saver: ' + (dataSaver ? 'on' : 'off');
-  saverBtn.classList.toggle('on', dataSaver);
+  const auto = !dataSaver && (autoLite || weakSignal());
+  saverBtn.textContent = '📶 Data saver: ' + (dataSaver ? 'on' : auto ? 'auto' : 'off');
+  saverBtn.classList.toggle('on', dataSaver || auto);
   saverBtn.setAttribute('aria-pressed', String(dataSaver));
 }
 saverBtn.addEventListener('click', () => {
@@ -660,6 +755,15 @@ saverBtn.addEventListener('click', () => {
   if (localStation) playHere(localStation);   // switch the stream now
 });
 renderSaver();
+
+// Signal got weak while listening: switch to the lighter stream.
+if (net) net.addEventListener('change', () => {
+  renderSaver();
+  if (localStation && hereLive && weakSignal() && audio.src !== streamFor(localStation).url) {
+    audio.src = streamFor(localStation).url;
+    audio.play().catch(() => {});
+  }
+});
 
 
 // Lock-screen / notification controls while playing on the phone.
@@ -730,6 +834,23 @@ function toggleFav(song) {
 
 $('favBtn').addEventListener('click', () => { if (currentSong) toggleFav(currentSong); });
 
+// Share what's playing: the phone's share sheet, or copy to the clipboard where there isn't one.
+const shareBtn = $('shareBtn');
+shareBtn.addEventListener('click', async () => {
+  if (!currentSong) return;
+  const url = location.origin + location.pathname;
+  const text = '🎃 Listening to ' + songText(currentSong) + ' on Halloween Radio (' + currentSong.station + ')';
+  if (navigator.share) {
+    try { await navigator.share({ title: 'Halloween Caster', text, url }); return; }
+    catch (e) { if (e.name === 'AbortError') return; }   // closed the share sheet; otherwise fall back to copying
+  }
+  try {
+    await navigator.clipboard.writeText(text + '\n' + url);
+    shareBtn.textContent = '✅ Copied';
+    setTimeout(() => { shareBtn.textContent = '📤 Share'; }, 1800);
+  } catch (e) {}
+});
+
 function renderFavs() {
   const list = $('favList');
   list.replaceChildren();
@@ -745,7 +866,8 @@ function renderFavs() {
     const links = document.createElement('div'); links.className = 'f-links';
     links.innerHTML =
       `<a href="https://www.youtube.com/results?search_query=${q}" target="_blank" rel="noopener">YouTube</a>` +
-      `<a href="https://music.youtube.com/search?q=${q}" target="_blank" rel="noopener">YouTube Music</a>`;
+      `<a href="https://music.youtube.com/search?q=${q}" target="_blank" rel="noopener">YouTube Music</a>` +
+      `<a href="https://open.spotify.com/search/${q}" target="_blank" rel="noopener">Spotify</a>`;
     const del = document.createElement('button'); del.className = 'li-btn'; del.textContent = '✕';
     del.setAttribute('aria-label', 'Remove from favorites');
     del.addEventListener('click', () => { favs = favs.filter(x => x !== f); saveFavs(); });
@@ -837,10 +959,11 @@ function updateProgress() {
   const frac = shownSec / np.duration;
   $('progBar').style.width = (frac * 100) + '%';
   $('progTime').textContent = TIME_STYLES[timeStyle](shownSec, np.duration);
+  $('progTime').setAttribute('aria-label', 'Song time ' + $('progTime').textContent + '. Tap to change how it’s shown');
   burnCandle(frac);
   if (elapsed > np.duration + 3 && Date.now() - lastPoll > 5000) pollStations([shownStation]);
 }
-setInterval(updateProgress, 1000);
+setInterval(() => { updateProgress(); if (waitText) render(); }, 1000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) pollNowPlaying(true); });
 pollNowPlaying(true);
 
@@ -983,7 +1106,11 @@ if (daysToHalloween() === 0) {
 const showOffline = () => showNotice('You’re offline. The music and song info will come back when you reconnect.');
 window.addEventListener('offline', showOffline);
 if (!navigator.onLine) showOffline();
-window.addEventListener('online', () => { hideNotice(); pollNowPlaying(true); });
+window.addEventListener('online', () => {
+  hideNotice();
+  pollNowPlaying(true);
+  if (localStation && !hereLive) { retry = 0; reconnectHere(); }   // bring the music back
+});
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
 // ── Rendering ───────────────────────────────────
@@ -991,6 +1118,7 @@ function showNotice(msg) { els.notice.textContent = msg; els.notice.hidden = fal
 function hideNotice() { els.notice.hidden = true; }
 
 let lastArt = null;
+let waitText = '', waitSince = 0, lastSaid = '';
 function setArt(url) {
   if (url === lastArt) return;
   lastArt = url;
@@ -1058,21 +1186,39 @@ function render() {
   favBtn.disabled = !currentSong;
   favBtn.textContent = saved ? '❤️ Saved' : '🤍 Save';
   favBtn.classList.toggle('saved', saved);
+  shareBtn.disabled = !currentSong;
 
   let stateText = 'Tap ▶ or a channel to listen';
+  let waiting = false;   // a "please wait" state: show how long it's been
   els.nowState.classList.remove('live');
-  if (castState === (CS && CS.CONNECTING)) stateText = 'Connecting to speaker…';
+  if (castState === (CS && CS.CONNECTING)) { stateText = 'Connecting to speaker…'; waiting = true; }
   else if (connected && remote === 'other' && pstate && pstate !== PS.IDLE) stateText = deviceName + ' is playing something else';
-  else if (connected && buffering) stateText = 'Starting on ' + deviceName + '…';
   else if (connected && playing) { stateText = 'Live on ' + deviceName; els.nowState.classList.add('live'); }
-  else if (localStation && !hereLive) stateText = 'Starting on this device…';
+  else if (connected && speakerReconnecting) { stateText = 'Reconnecting ' + deviceName + '…'; waiting = true; }
+  else if (connected && (buffering || speakerLoading)) { stateText = 'Warming up ' + deviceName + '…'; waiting = true; }
+  else if (localStation && reconnecting === 'offline') { stateText = 'No signal. It’ll resume when you’re back online'; waiting = true; }
+  else if (localStation && reconnecting) { stateText = 'Reconnecting…'; waiting = true; }
+  else if (localStation && !hereLive) { stateText = 'Starting on this device…'; waiting = true; }
   else if (localStation) { stateText = 'Playing on this device'; els.nowState.classList.add('live'); }
   else if (connected) stateText = 'Connected to ' + deviceName + ' · stopped';
+  if (waiting) {
+    if (stateText !== waitText) { waitText = stateText; waitSince = Date.now(); }
+    const secs = Math.floor((Date.now() - waitSince) / 1000);
+    if (secs >= 2) stateText += ' ' + secs + 's';
+  } else waitText = '';
+  // Screen readers hear song changes and big status changes, not every ticking second.
+  const say = (np.title ? 'Now playing ' + songText(np) + ' on ' + shown.name + '. ' : '') + (waiting ? waitText : stateText);
+  if (say !== lastSaid) { lastSaid = say; $('announce').textContent = say; }
   els.nowState.textContent = stateText;
 
   // Station highlight follows the speaker when it's playing one of ours
   STATIONS.forEach(s => {
     s.el.classList.toggle('active', s === shown);
+    const n0 = nowPlaying[s.code];
+    const isOn = s === activeRemote || s === localStation;
+    s.el.setAttribute('aria-pressed', String(isOn));
+    s.el.setAttribute('aria-label', s.name + (isOn ? ', playing. Tap to stop' : '') +
+      (n0 && n0.title ? '. ' + songText(n0) : '') + (n0 && n0.listeners != null ? '. ' + n0.listeners + ' listening' : ''));
     const n = nowPlaying[s.code];
     s.el.querySelector('.song').textContent = !n ? '…' : n.online === false ? 'Off air right now' : songText(n);
     s.el.querySelector('.onair').textContent = n && n.dj ? '🔴 LIVE' : '';
@@ -1092,9 +1238,11 @@ function render() {
   els.disconnectBtn.disabled = !connected;
   if (connected && player) {
     els.muteIcon.innerHTML = player.isMuted ? ICONS.mute : ICONS.vol;
+    els.muteBtn.setAttribute('aria-label', player.isMuted ? 'Unmute' : 'Mute');
     if (document.activeElement !== els.vol && !volTimer) els.vol.value = Math.round(player.volumeLevel * 100);
   } else if (localStation) {
     els.muteIcon.innerHTML = audio.muted ? ICONS.mute : ICONS.vol;
+    els.muteBtn.setAttribute('aria-label', audio.muted ? 'Unmute' : 'Mute');
   }
 }
 
