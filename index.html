@@ -1521,6 +1521,15 @@ els.vol.addEventListener('change', () => setTimeout(() => { volTimer = null; }, 
 
 render();
 </script>
-<script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1" onerror="window.__onGCastApiAvailable(false)"></script>
+<script>
+// Inside the Android app, casting goes through Android's own Cast service; in a browser, Google's web cast library.
+(function () {
+  const s = document.createElement('script');
+  if (window.AndroidCast) s.src = 'android-cast.js';
+  else s.src = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
+  s.onerror = () => window.__onGCastApiAvailable(false);
+  document.body.appendChild(s);
+})();
+</script>
 </body>
 </html>
