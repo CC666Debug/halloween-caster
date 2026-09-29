@@ -1,5 +1,6 @@
 // Keeps the app's own files on the phone so it opens instantly, even with no signal.
-// The page itself is fetched fresh when online (so updates show up right away);
+// The page itself is fetched fresh when online (so updates show up right away, even though
+// GitHub Pages tells browsers they may reuse it for 10 minutes);
 // the saved copy is only used when the network fails. Streams and song info are never cached.
 const CACHE = 'hc-v1';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
@@ -23,7 +24,7 @@ self.addEventListener('fetch', e => {
   if (req.mode === 'navigate') {
     // Network first for the page, falling back to the saved copy.
     e.respondWith(
-      fetch(req)
+      fetch(req, { cache: 'no-cache' })   // always ask the server; a quick "not modified" if unchanged
         .then(res => {
           if (res.ok) {
             const copy = res.clone();
