@@ -402,6 +402,7 @@ const els = {
 const ICONS = {
   play: '<path d="M8 5v14l11-7z"/>',
   stop: '<path d="M6 6h12v12H6z"/>',
+  pause: '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>',
   vol:  '<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4z"/>',
   mute: '<path d="M16.5 12A4.5 4.5 0 0 0 14 8v2.2l2.4 2.4c.1-.2.1-.4.1-.6zM19 12c0 .9-.2 1.8-.5 2.6l1.5 1.5A8.8 8.8 0 0 0 21 12a9 9 0 0 0-7-8.8v2.1a7 7 0 0 1 5 6.7zM4.3 3 3 4.3 7.7 9H3v6h4l5 5v-6.7l4.3 4.3c-.7.5-1.4.9-2.3 1.2v2.1a9 9 0 0 0 3.7-1.8l2 2 1.3-1.3L4.3 3zM12 4 9.9 6.1 12 8.2V4z"/>',
 };
@@ -435,7 +436,7 @@ STATIONS.forEach(s => {
 function chooseStation(s) {
   // Tapping the channel that's already playing stops it, like the Stop button.
   if (localStation === s) { stopHere(); return; }
-  if (castActive() && remoteStation() === s) { ctrl.stop(); return; }
+  if (castActive() && remoteStation() === s) { toggleSpeaker(); return; }
   selected = s;
   safeSet('hc_station', s.id);
   if (castConnected()) { loadStation(s); render(); }
@@ -475,7 +476,7 @@ window.__onGCastApiAvailable = function (available) {
     // Disconnecting carries the music back to the phone (unless the speaker was stopped).
     if (e.sessionState === S.SESSION_ENDING) {
       const r = remoteStation();
-      carryOver = r && r !== 'other' && castActive() ? r : null;
+      carryOver = r && r !== 'other' && castActive() && !speakerPaused() ? r : null;
     }
     if (e.sessionState === S.SESSION_ENDED) { speakerLoading = speakerStation = null; speakerReconnecting = false; }
     if (e.sessionState === S.SESSION_ENDED && carryOver) {
@@ -557,6 +558,19 @@ els.castBtn.addEventListener('click', () => {
   ctx.requestSession().catch(() => {});
 });
 
+// Pause rather than stop, like the Google Home app: the speaker keeps its connection to the
+// stream, so it starts again instantly instead of warming up from scratch. After a long pause
+// it would be well behind the live broadcast, so it restarts the channel fresh instead.
+const RESUME_WITHIN = 3 * 60000;
+let pausedAt = 0;
+const speakerPaused = () => !!player && player.playerState === chrome.cast.media.PlayerState.PAUSED;
+function toggleSpeaker() {
+  if (!speakerPaused()) { pausedAt = Date.now(); ctrl.playOrPause(); return; }
+  if (Date.now() - pausedAt < RESUME_WITHIN) { ctrl.playOrPause(); return; }
+  const s = remoteStation();
+  if (s && s !== 'other') loadStation(s);
+}
+
 const castConnected = () => !!(ctx && ctx.getCurrentSession());
 function castActive() {
   return !!ctx && player.isMediaLoaded && !!player.playerState
@@ -565,7 +579,8 @@ function castActive() {
 
 els.playBtn.addEventListener('click', () => {
   // Live radio: stop rather than pause, so Play rejoins the broadcast at "now".
-  if (castActive()) ctrl.stop();
+  if (castActive() && speakerIsOurs()) toggleSpeaker();
+  else if (castActive()) ctrl.stop();
   else if (localStation) stopHere();
   else chooseStation(selected);
 });
@@ -845,6 +860,18 @@ function checkSleep() {
 }
 setInterval(checkSleep, 1000);   // every second, so the fade is smooth
 document.addEventListener('visibilitychange', checkSleep);
+
+// Coming back after a while: the phone may have frozen the page and left its speaker
+// connection stale. A quick reload reconnects (and rejoins a speaker that's still playing),
+// but only when nothing is playing on the phone, so the music isn't interrupted.
+const STALE_AFTER = 5 * 60000;
+let hiddenSince = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { hiddenSince = Date.now(); return; }
+  const away = hiddenSince && Date.now() - hiddenSince >= STALE_AFTER;
+  hiddenSince = 0;
+  if (away && !localStation && !premiumDlg.open) location.reload();
+});
 
 // ── Favorites (kept on this phone) ──────────────
 const FAV_KEY = 'hc_favs';
@@ -1188,6 +1215,7 @@ function render() {
   const pstate = connected && player && player.isMediaLoaded ? player.playerState : null;
   const playing = pstate === (PS && PS.PLAYING);
   const buffering = pstate === (PS && PS.BUFFERING);
+  const paused = pstate === (PS && PS.PAUSED);
   const activeRemote = remote && remote !== 'other' && pstate && pstate !== PS.IDLE ? remote : null;
 
   const shown = activeRemote || localStation || selected;
@@ -1226,6 +1254,7 @@ function render() {
   if (castState === (CS && CS.CONNECTING)) { stateText = 'Connecting to speaker…'; waiting = true; }
   else if (connected && remote === 'other' && pstate && pstate !== PS.IDLE) stateText = deviceName + ' is playing something else';
   else if (connected && playing) { stateText = 'Live on ' + deviceName; els.nowState.classList.add('live'); }
+  else if (connected && paused && activeRemote) stateText = 'Paused on ' + deviceName + ' · tap ▶ to carry on';
   else if (connected && speakerReconnecting) { stateText = 'Reconnecting ' + deviceName + '…'; waiting = true; }
   else if (connected && (buffering || speakerLoading)) { stateText = 'Warming up ' + deviceName + '…'; waiting = true; }
   else if (localStation && reconnecting === 'offline') { stateText = 'No signal. It’ll resume when you’re back online'; waiting = true; }
@@ -1247,7 +1276,7 @@ function render() {
   STATIONS.forEach(s => {
     s.el.classList.toggle('active', s === shown);
     const n0 = nowPlaying[s.code];
-    const isOn = s === activeRemote || s === localStation;
+    const isOn = (s === activeRemote && !paused) || s === localStation;
     s.el.setAttribute('aria-pressed', String(isOn));
     s.el.setAttribute('aria-label', s.name + (isOn ? ', playing. Tap to stop' : '') +
       (n0 && n0.title ? '. ' + songText(n0) : '') + (n0 && n0.listeners != null ? '. ' + n0.listeners + ' listening' : ''));
@@ -1259,9 +1288,9 @@ function render() {
   });
 
   // Transport
-  const active = !!activeRemote || (remote === 'other' && pstate && pstate !== PS.IDLE) || !!localStation;
-  els.playIcon.innerHTML = active ? ICONS.stop : ICONS.play;
-  els.playBtn.setAttribute('aria-label', active ? 'Stop' : 'Play');
+  const active = (!!activeRemote && !paused) || (remote === 'other' && pstate && pstate !== PS.IDLE) || !!localStation;
+  els.playIcon.innerHTML = active ? (activeRemote ? ICONS.pause : ICONS.stop) : ICONS.play;
+  els.playBtn.setAttribute('aria-label', active ? (activeRemote ? 'Pause' : 'Stop') : 'Play');
 
 
   // Volume and mute follow the speaker when connected, otherwise this device.
