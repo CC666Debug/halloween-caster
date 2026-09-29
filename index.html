@@ -51,6 +51,9 @@
   .cast-btn.connected { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
   .cast-btn.connecting svg { animation: pulse 1s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: .3; } }
+  .cast-btn.nudge { border-color: var(--accent); animation: glow 1.2s ease-in-out infinite; }
+  @keyframes glow { 50% { box-shadow: 0 0 0 4px rgba(255, 122, 24, .35); } }
+  @media (prefers-reduced-motion: reduce) { .cast-btn.nudge { animation: none; } }
 
   .notice {
     background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--warn);
@@ -500,13 +503,19 @@ window.__onGCastApiAvailable = function (available) {
     resumeSavedSession: true,
   });
   diag('cast state at start: ' + ctx.getCastState() + (ctx.getCurrentSession() ? ' · already joined ' + ctx.getCurrentSession().getCastDevice().friendlyName : ''));
+  afterUnjam();
   player = new cast.framework.RemotePlayer();
   ctrl = new cast.framework.RemotePlayerController(player);
 
   ctrl.addEventListener(cast.framework.RemotePlayerEventType.ANY_CHANGE, () => { onSpeakerState(); render(); });
-  ctx.addEventListener(cast.framework.CastContextEventType.CAST_STATE_CHANGED, e => { diag('cast state: ' + e.castState); render(); });
+  ctx.addEventListener(cast.framework.CastContextEventType.CAST_STATE_CHANGED, e => {
+    diag('cast state: ' + e.castState);
+    if (castListOpen && e.castState === cast.framework.CastState.NO_DEVICES_AVAILABLE) unjamCasting();
+    render();
+  });
   ctx.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED, e => {
     const s = e.session;
+    if (e.sessionState === cast.framework.SessionState.SESSION_STARTED) { els.castBtn.classList.remove('nudge'); hideNotice(); }
     diag('session: ' + e.sessionState + (e.errorCode ? ' · error ' + e.errorCode : '')
       + (s ? ' · ' + s.getCastDevice().friendlyName : ''));
   });
@@ -648,10 +657,44 @@ els.castBtn.addEventListener('click', () => {
   // requestSession opens Chrome's device picker (speakers and groups); when connected it lets you switch or stop.
   const t = performance.now();
   diag('cast button tapped (state ' + ctx.getCastState() + ')');
+  els.castBtn.classList.remove('nudge');
+  castListOpen = true;
   ctx.requestSession().then(
-    () => diag('speaker picked, connected after ' + ((performance.now() - t) / 1000).toFixed(2) + 's'),
-    err => diag('connect FAILED after ' + ((performance.now() - t) / 1000).toFixed(2) + 's · ' + err));
+    () => { castListOpen = false; diag('speaker picked, connected after ' + ((performance.now() - t) / 1000).toFixed(2) + 's'); },
+    err => {
+      castListOpen = false;
+      diag('connect FAILED after ' + ((performance.now() - t) / 1000).toFixed(2) + 's · ' + err);
+      // Fails instantly like this only when an earlier speaker list got stuck.
+      if (err === 'invalid_parameter') unjamCasting();
+    });
 });
+
+// On a fresh open, opening the speaker list makes the phone re-scan for speakers, and the
+// diagnostic log showed that the re-scan kills the connection behind the open list: picking
+// a speaker then does nothing, and casting stays stuck until the page is refreshed. After a
+// refresh the list works every time. So when the re-scan hits while the list is open, the
+// app refreshes itself straight away and asks for one more tap on the cast button.
+const UNJAM_KEY = 'hc_unjam';
+let castListOpen = false;
+function unjamCasting() {
+  let last = 0;
+  try { last = +sessionStorage.getItem(UNJAM_KEY) || 0; } catch (e) {}
+  if (Date.now() - last < 30000) {   // already refreshed just now: don't loop
+    showNotice('Couldn’t connect to the speaker. Pull down to refresh and try again.');
+    return;
+  }
+  try { sessionStorage.setItem(UNJAM_KEY, String(Date.now())); } catch (e) { return; }
+  diag('speaker list got cut off by the phone re-scanning: refreshing the app');
+  location.reload();
+}
+function afterUnjam() {
+  let at = 0;
+  try { at = +sessionStorage.getItem(UNJAM_KEY) || 0; } catch (e) {}
+  if (!at || Date.now() - at > 30000) return;
+  diag('refreshed to unjam casting, ready for another tap');
+  showNotice('Ready. Tap the cast button again to pick your speaker.');
+  els.castBtn.classList.add('nudge');
+}
 
 // Pause rather than stop, like the Google Home app: the speaker keeps its connection to the
 // stream, so it starts again instantly instead of warming up from scratch. After a long pause
