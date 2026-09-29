@@ -470,9 +470,9 @@ window.__onGCastApiAvailable = function (available) {
       stopHere();
       loadStation(s);
     }
-    if (e.sessionState === S.SESSION_START_FAILED) {
-      showNotice('The speaker didn’t accept the connection. Try again.');
-    }
+    if (e.sessionState === S.SESSION_START_FAILED) castFailed(e.errorCode || '');
+    // Joined the speaker after the automatic reconnect below.
+    if ((e.sessionState === S.SESSION_STARTED || e.sessionState === S.SESSION_RESUMED) && castRetry) castRetried();
     // Disconnecting carries the music back to the phone (unless the speaker was stopped).
     if (e.sessionState === S.SESSION_ENDING) {
       const r = remoteStation();
@@ -486,8 +486,61 @@ window.__onGCastApiAvailable = function (available) {
     }
     render();
   });
+  castRetry = readCastRetry();
+  if (castRetry) {
+    showNotice('Reconnecting to the speaker…');
+    setTimeout(() => { if (castRetry) castRetryGaveUp(); }, 10000);
+  }
   render();
 };
+
+// Speaker groups can take longer to start than the phone is willing to wait, so the first try
+// "fails" even though the group finishes starting a moment later. A fresh page then joins it
+// (that's why refreshing by hand always worked), so the app does that refresh itself, once.
+const RETRY_KEY = 'hc_cast_retry';
+let castRetry = null;   // { at, station, wasPlaying } while reconnecting after a reload
+function readCastRetry() {
+  try {
+    const r = JSON.parse(sessionStorage.getItem(RETRY_KEY) || 'null');
+    return r && Date.now() - r.at < 60000 ? r : null;
+  } catch (e) { return null; }
+}
+function clearCastRetry() {
+  castRetry = null;
+  try { sessionStorage.removeItem(RETRY_KEY); } catch (e) {}
+}
+function castFailed(code) {
+  if (code === 'cancel') return;   // the speaker list was just closed
+  if (castRetry || readCastRetry()) {   // already reconnected once: don't loop
+    clearCastRetry();
+    showNotice('The speaker didn’t accept the connection' + (code ? ' (' + code + ')' : '') + '. Try again.');
+    return;
+  }
+  try {
+    sessionStorage.setItem(RETRY_KEY, JSON.stringify({ at: Date.now(), station: (localStation || selected).id, wasPlaying: !!localStation }));
+  } catch (e) {
+    showNotice('The speaker didn’t accept the connection. Try again.');
+    return;
+  }
+  showNotice('The speaker is slow to answer. Reconnecting…');
+  setTimeout(() => location.reload(), 2500);
+}
+function castRetried() {
+  const r = castRetry;
+  clearCastRetry();
+  hideNotice();
+  // Carry on with what the phone was playing, unless the speaker is already playing something.
+  const s = STATIONS.find(x => x.id === r.station);
+  if (r.wasPlaying && s) setTimeout(() => { if (castConnected() && !castActive()) loadStation(s); }, 1500);
+}
+function castRetryGaveUp() {
+  const r = castRetry;
+  clearCastRetry();
+  const s = STATIONS.find(x => x.id === r.station);
+  const back = r.wasPlaying && s && !castConnected();
+  if (back) playHere(s);
+  showNotice('Couldn’t reach the speaker' + (back ? ', so it’s playing here for now' : '') + '. Tap the cast button to try again.');
+}
 
 function loadStation(s, stream = { url: s.url, type: s.type }, isBackup = false) {
   const session = ctx.getCurrentSession();
