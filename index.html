@@ -386,7 +386,7 @@ function diag(msg) {
   if (diagLines.length > 400) diagLines = diagLines.slice(-400);
   try { localStorage.setItem(DIAG_KEY, JSON.stringify(diagLines)); } catch (e) {}
 }
-diag('──── app opened · version ' + document.lastModified + ' · ' + (matchMedia('(display-mode: standalone)').matches ? 'home-screen app' : 'browser tab')
+diag('──── app opened · version ' + document.lastModified + ' · ' + (window.AndroidCast ? 'Halloween Caster Android app' : matchMedia('(display-mode: standalone)').matches ? 'home-screen app' : 'browser tab')
   + ' · ' + (navigator.onLine ? 'online' : 'OFFLINE') + ' · ' + navigator.userAgent);
 addEventListener('error', e => diag('ERROR ' + e.message + ' @' + e.lineno));
 addEventListener('unhandledrejection', e => diag('ERROR (promise) ' + (e.reason && (e.reason.code || e.reason.message) || e.reason)));
