@@ -506,13 +506,32 @@ function loadStation(s, stream = { url: s.url, type: s.type }, isBackup = false)
   req.autoplay = true;
   hideNotice();
   speakerLoading = s;
-  session.loadMedia(req).catch(err => {
+  session.loadMedia(req).then(kickStart).catch(err => {
     const backup = !isBackup && backupFor(s, stream.url);
     if (backup) { loadStation(s, backup, true); return; }
     speakerLoading = null;
     showNotice('The speaker couldn’t start ' + s.name + ' (' + err + ').');
     render();
   });
+}
+
+// The speaker's standard player can sit "warming up" for ~30 seconds on a live stream, yet a
+// quick pause and play gets it going at once (found by hand). So the app does that nudge itself,
+// a few times if needed, until the speaker is really playing.
+let kickTimers = [];
+let kicking = false;   // mid-nudge: don't show the speaker as paused
+function kickStart() {
+  kickTimers.forEach(clearTimeout);
+  kickTimers = [2000, 5000, 9000, 14000].map(ms => setTimeout(() => {
+    const session = ctx.getCurrentSession();
+    const media = session && session.getMediaSession();
+    const PS = chrome.cast.media.PlayerState;
+    if (!media || !speakerLoading || player.playerState === PS.PLAYING || player.playerState === PS.IDLE) return;
+    kicking = true;
+    const done = () => { kicking = false; render(); };
+    media.pause(new chrome.cast.media.PauseRequest(),
+      () => media.play(new chrome.cast.media.PlayRequest(), done, done), done);
+  }, ms));
 }
 
 // Watches the speaker: notes when it's really playing, and restarts the channel if its stream drops.
@@ -1215,7 +1234,7 @@ function render() {
   const pstate = connected && player && player.isMediaLoaded ? player.playerState : null;
   const playing = pstate === (PS && PS.PLAYING);
   const buffering = pstate === (PS && PS.BUFFERING);
-  const paused = pstate === (PS && PS.PAUSED);
+  const paused = pstate === (PS && PS.PAUSED) && !kicking && !speakerLoading;
   const activeRemote = remote && remote !== 'other' && pstate && pstate !== PS.IDLE ? remote : null;
 
   const shown = activeRemote || localStation || selected;
