@@ -567,24 +567,34 @@ function loadStation(s, stream = { url: s.url, type: s.type }, isBackup = false)
   });
 }
 
-// The speaker's standard player can sit "warming up" for ~30 seconds on a live stream, yet a
-// quick pause and play gets it going at once (found by hand). So the app does that nudge itself,
-// a few times if needed, until the speaker is really playing.
-let kickTimers = [];
+// The speaker's standard player often plays for half a second, then sits "buffering" for
+// ~25 seconds before the sound really starts (seen in the diagnostic log). A quick pause and
+// play gets it going at once (found by hand), so while a channel is starting the app watches
+// for that stall and nudges the speaker itself, up to 4 times.
+const NUDGE_AFTER = 1500;     // stalled this long: nudge
+const NUDGE_WINDOW = 60000;   // only while a channel is starting up
+let nudgeUntil = 0, nudges = 0, nudgeTimer = null;
 let kicking = false;   // mid-nudge: don't show the speaker as paused
 function kickStart() {
-  kickTimers.forEach(clearTimeout);
-  kickTimers = [2000, 5000, 9000, 14000].map(ms => setTimeout(() => {
+  nudgeUntil = Date.now() + NUDGE_WINDOW;
+  nudges = 0;
+  watchStall();
+}
+function watchStall() {
+  clearTimeout(nudgeTimer);
+  const PS = chrome.cast.media.PlayerState;
+  if (Date.now() > nudgeUntil || nudges >= 4 || player.playerState !== PS.BUFFERING) return;
+  nudgeTimer = setTimeout(() => {
     const session = ctx.getCurrentSession();
     const media = session && session.getMediaSession();
-    const PS = chrome.cast.media.PlayerState;
-    if (!media || !speakerLoading || player.playerState === PS.PLAYING || player.playerState === PS.IDLE) return;
+    if (!media || player.playerState !== PS.BUFFERING) return;
+    nudges++;
     kicking = true;
-    diag('nudging speaker (pause + play), it was ' + player.playerState);
+    diag('nudge ' + nudges + ': speaker stalled buffering ' + (NUDGE_AFTER / 1000) + 's, pause + play');
     const done = () => { kicking = false; render(); };
     media.pause(new chrome.cast.media.PauseRequest(),
       () => media.play(new chrome.cast.media.PlayRequest(), done, done), done);
-  }, ms));
+  }, NUDGE_AFTER);
 }
 
 // Watches the speaker: notes when it's really playing, and restarts the channel if its stream drops.
@@ -600,6 +610,7 @@ function onSpeakerState() {
       + (player.playerState === PS.IDLE && media && media.idleReason ? ' (' + media.idleReason + ')' : '')
       + (loadStartedAt ? ' · ' + ((performance.now() - loadStartedAt) / 1000).toFixed(2) + 's since sending' : ''));
   }
+  watchStall();
   lastSpeakerState = player.playerState;
   if (player.playerState === PS.PLAYING) {
     const r = remoteStation();
