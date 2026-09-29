@@ -135,7 +135,7 @@
     padding: 10px; color: var(--muted); font-size: 14px;
   }
   .song-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
-  .song-actions #bewitchLink { flex-basis: 100%; }
+  .song-actions .pill { flex-basis: 40%; }   /* two per row */
   .pill {
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
     flex: 1; text-align: center; text-decoration: none; font-size: 14px;
@@ -290,6 +290,7 @@
       <button class="pill" id="favBtn" disabled>🤍 Save</button>
       <button class="pill" id="shareBtn" disabled>📤 Share</button>
       <a class="pill" id="bewitchLink" href="https://halloweenradio.net/playlist" target="_blank" rel="noopener">👻 Bewitch on site</a>
+      <a class="pill" id="spineLink" href="https://halloweenradio.net/spine-tingler" target="_blank" rel="noopener" title="Rate how spooky this song feels on halloweenradio.net">🦴 Spine-Tingler</a>
     </div>
   </section>
 
@@ -362,6 +363,9 @@ const STATIONS = [
     lite: 'https://radio1.streamserver.link/radio/8040/hra-aac' },
   { id: 'instrumental', name: 'Instrumental', code: 'halloween_radio_instrumental', url: 'https://radio1.streamserver.link/radio/8100/hri-aac', type: 'audio/aac' },
 ];
+// Spine-Tingler (rate how spooky the song feels) opens on the same channel. Premium has no tab there.
+const SPINE = { main: 'hrm', oldies: 'hro', kids: 'hrk', movies: 'hrs', atmosphere: 'hra', instrumental: 'hri' };
+const spineUrl = s => 'https://halloweenradio.net/spine-tingler' + (SPINE[s.id] ? '?station=' + SPINE[s.id] : '');
 const NOW_PLAYING = code => `https://radio1.streamserver.link/api/nowplaying_static/${code}.json`;
 const POLL_MS = 15000;
 
@@ -387,7 +391,7 @@ if (premiumUrl) {
 
 const $ = id => document.getElementById(id);
 const els = {
-  castBtn: $('castBtn'), castLabel: $('castLabel'), notice: $('notice'),
+  castBtn: $('castBtn'), spineLink: $('spineLink'), castLabel: $('castLabel'), notice: $('notice'),
   artWrap: $('artWrap'), nowStation: $('nowStation'), nowTitle: $('nowTitle'),
   nowArtist: $('nowArtist'), nowState: $('nowState'), nowNext: $('nowNext'),
   sleepBtn: $('sleepBtn'),
@@ -1188,6 +1192,7 @@ function render() {
 
   const shown = activeRemote || localStation || selected;
   const np = nowPlaying[shown.code] || {};
+  els.spineLink.href = spineUrl(shown);
   els.nowStation.textContent = [
     shown.name,
     np.online === false ? 'off air' : '',

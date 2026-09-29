@@ -15,6 +15,7 @@ A one-tap phone remote for [Halloween Radio](https://halloweenradio.net). Cast a
 - **How many people are listening**, and a 🔴 **LIVE** badge when a real DJ is on air. Channels that are down show as off air.
 - **Data saver.** Listening on your phone away from Wi-Fi? Switch to the 64 kbps version and use half the data. It also turns itself on when your signal gets weak. If a stream won't play, the app quietly tries the other version.
 - **Keeps playing through drop-outs.** Lose signal on a walk and the app reconnects by itself, on the phone or on a speaker, and the music comes back as soon as the signal does.
+- **Spine-Tingler.** One tap opens Halloween Radio's Spine-Tingler page on the channel you're listening to, so you can rate how spooky the song feels.
 - **Share a song.** Send what's playing to a friend, with a link to the app.
 - **Favorites.** Save a song (from Now playing or Recently played) and find it later on YouTube, YouTube Music or Spotify.
 - **Sleep timer.** Stop the music after 15, 30, 60 or 90 minutes. It fades out gently over the last minute, then puts the volume back for next time.
