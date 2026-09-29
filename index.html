@@ -566,6 +566,7 @@ function loadStation(s, stream = { url: s.url, type: s.type }, isBackup = false)
   const t = performance.now();
   loadStartedAt = t;
   diag('sending ' + s.name + ' to ' + session.getCastDevice().friendlyName + ' · ' + stream.url);
+  kickStart();   // watch for a stall from the moment it's sent (the speaker can start before it says it accepted)
   session.loadMedia(req).then(() => { diag('speaker accepted ' + s.name + ' after ' + ((performance.now() - t) / 1000).toFixed(2) + 's'); kickStart(); }).catch(err => {
     diag('speaker REFUSED ' + s.name + ' after ' + ((performance.now() - t) / 1000).toFixed(2) + 's · ' + err);
     const backup = !isBackup && backupFor(s, stream.url);
