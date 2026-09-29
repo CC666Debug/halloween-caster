@@ -792,27 +792,54 @@ function updateMediaSession() {
 const SLEEP_STEPS = [0, 15, 30, 60, 90];
 let sleepStep = 0;
 let sleepAt = 0;   // time to stop, in ms; 0 = off
+const FADE_MS = 60000;   // the music fades out over the last minute
+let fade = null;         // volumes from before the fade, so they can be put back
 
 els.sleepBtn.addEventListener('click', () => {
+  endFade();
   sleepStep = (sleepStep + 1) % SLEEP_STEPS.length;
   sleepAt = SLEEP_STEPS[sleepStep] ? Date.now() + SLEEP_STEPS[sleepStep] * 60000 : 0;
   checkSleep();
 });
 
+// Only touch the speaker if it's playing one of ours, not something else.
+function speakerIsOurs() {
+  const r = remoteStation();
+  return !!(r && r !== 'other' && castActive());
+}
+
+function fadeTo(frac) {
+  if (!fade) fade = { here: els.vol.value / 100, speaker: speakerIsOurs() ? player.volumeLevel : null };
+  audio.volume = fade.here * frac;
+  if (fade.speaker != null && castConnected()) {
+    player.volumeLevel = fade.speaker * frac;
+    ctrl.setVolumeLevel();
+  }
+}
+
+// Put the volume back where it was, so the next listen isn't quiet.
+function endFade() {
+  if (!fade) return;
+  fadeTo(1);
+  fade = null;
+}
+
 function checkSleep() {
-  if (sleepAt && Date.now() >= sleepAt) {
+  const left = sleepAt - Date.now();
+  if (sleepAt && left <= 0) {
     sleepAt = 0; sleepStep = 0;
     stopHere();
-    // Only stop the speaker if it's playing one of ours, not something else.
-    const r = remoteStation();
-    if (r && r !== 'other' && castActive()) ctrl.stop();
+    if (speakerIsOurs()) ctrl.stop();
+    endFade();
+  } else if (sleepAt && left <= FADE_MS && (localStation || speakerIsOurs() || fade)) {
+    fadeTo(left / FADE_MS);
   }
   els.sleepBtn.textContent = sleepAt
     ? '🌙 ' + Math.ceil((sleepAt - Date.now()) / 60000) + ' min left'
     : '🌙 Sleep: off';
   els.sleepBtn.classList.toggle('on', !!sleepAt);
 }
-setInterval(checkSleep, 15000);
+setInterval(checkSleep, 1000);   // every second, so the fade is smooth
 document.addEventListener('visibilitychange', checkSleep);
 
 // ── Favorites (kept on this phone) ──────────────

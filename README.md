@@ -17,7 +17,7 @@ A one-tap phone remote for [Halloween Radio](https://halloweenradio.net). Cast a
 - **Keeps playing through drop-outs.** Lose signal on a walk and the app reconnects by itself, on the phone or on a speaker, and the music comes back as soon as the signal does.
 - **Share a song.** Send what's playing to a friend, with a link to the app.
 - **Favorites.** Save a song (from Now playing or Recently played) and find it later on YouTube, YouTube Music or Spotify.
-- **Sleep timer.** Stop the music after 15, 30, 60 or 90 minutes.
+- **Sleep timer.** Stop the music after 15, 30, 60 or 90 minutes. It fades out gently over the last minute, then puts the volume back for next time.
 - **Halloween countdown.** Days until October 31 at the top. Tap it and hand-drawn bats, jack-o'-lanterns, ghosts or a coven of witches on broomsticks fly across the screen, a different group each time. On Halloween itself, they come out on their own. 🧙‍♀️
 - **Opens instantly, even offline.** Add it to your home screen and it opens straight away, even with no signal. The music comes back as soon as you reconnect.
 - **Premium channel** for Halloween Radio supporters: paste your own stream link once. The app tests it before saving, keeps it on your phone only, and adds a Premium channel card that only appears once it's set up.
