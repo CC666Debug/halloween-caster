@@ -845,33 +845,6 @@ $('premiumForm').addEventListener('submit', async e => {
 
 // ── Listening on this phone ─────────────────────
 const audio = new Audio();
-
-// Experiment: on a fresh open, the phone only starts looking for speakers when the speaker list
-// opens, and that search wipes out the first pick (see the diagnostic log). So start the phone
-// looking the moment the app opens, in the background, and log what it finds.
-const speakerSearch = {};   // kept so the searches aren't thrown away
-function warmUpSpeakerSearch() {
-  const found = (how, yes) => diag('background speaker search (' + how + '): ' + (yes ? 'speakers found' : 'none found'));
-  try {
-    if (window.PresentationRequest) {
-      speakerSearch.request = new PresentationRequest(['cast:CC1AD845']);   // Google's standard speaker player
-      speakerSearch.request.getAvailability().then(av => {
-        speakerSearch.availability = av;
-        found('presentation', av.value);
-        av.onchange = () => found('presentation', av.value);
-      }, e => diag('background speaker search (presentation) not allowed: ' + (e.name || e)));
-    } else diag('background speaker search (presentation): not supported');
-  } catch (e) { diag('background speaker search (presentation) failed: ' + (e.name || e)); }
-  try {
-    if (audio.remote && audio.remote.watchAvailability) {
-      audio.preload = 'none';
-      if (!audio.src) audio.src = STATIONS[0].url;   // it needs something to look for; preload none, so nothing downloads
-      audio.remote.watchAvailability(yes => found('remote playback', yes))
-        .catch(e => diag('background speaker search (remote playback) not allowed: ' + (e.name || e)));
-    } else diag('background speaker search (remote playback): not supported');
-  } catch (e) { diag('background speaker search (remote playback) failed: ' + (e.name || e)); }
-}
-warmUpSpeakerSearch();
 audio.preload = 'none';
 let localStation = null;   // station playing through this phone, if any
 let hereLive = false;      // true once audio is actually coming out
