@@ -223,6 +223,11 @@
     width: min(440px, calc(100vw - 32px)); padding: 20px; border-radius: var(--radius);
     background: var(--surface); color: var(--text); border: 1px solid var(--line);
   }
+  #diagText {
+    max-height: 55vh; overflow: auto; margin: 0 0 12px; padding: 8px; border-radius: 8px;
+    background: var(--bg); border: 1px solid var(--line); font-size: 11px; line-height: 1.4;
+    white-space: pre-wrap; word-break: break-word; user-select: text;
+  }
   dialog::backdrop { background: rgba(0, 0, 0, .6); }
   dialog h2 { margin: 0 0 8px; font-size: 18px; }
   dialog p { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
@@ -332,6 +337,19 @@
   <footer>Unofficial remote. Music streamed from <a href="https://halloweenradio.net" target="_blank" rel="noopener">halloweenradio.net</a>.</footer>
 </main>
 
+<dialog id="diagDlg">
+  <form method="dialog">
+    <h2>🔧 Diagnostic log</h2>
+    <p>Every step of connecting and playing, with timings. Copy it and paste it to whoever is helping you.</p>
+    <pre id="diagText"></pre>
+    <div class="row">
+      <button class="ghost" type="button" id="diagClear">Clear</button>
+      <button class="ghost" type="button" id="diagCopy">Copy log</button>
+      <button class="primary" value="close" autofocus>Close</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="premiumDlg">
   <form method="dialog" id="premiumForm" novalidate>
     <h2>⭐ Premium channel</h2>
@@ -350,6 +368,29 @@
 </dialog>
 
 <script>
+// ── Diagnostic log ──────────────────────────────
+// Records each step of connecting and playing, with timings, so problems can be traced from
+// real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
+// 🎃 title 5 times to see it.
+const DIAG_KEY = 'hc_diag';
+const diagT0 = performance.now();
+let diagLines = [];
+try { diagLines = JSON.parse(localStorage.getItem(DIAG_KEY) || '[]'); } catch (e) { diagLines = []; }
+function diag(msg) {
+  const d = new Date();
+  const clock = d.toTimeString().slice(0, 8) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+  diagLines.push(clock + '  +' + ((performance.now() - diagT0) / 1000).toFixed(2) + 's  ' + msg);
+  if (diagLines.length > 400) diagLines = diagLines.slice(-400);
+  try { localStorage.setItem(DIAG_KEY, JSON.stringify(diagLines)); } catch (e) {}
+}
+diag('──── app opened · ' + (matchMedia('(display-mode: standalone)').matches ? 'home-screen app' : 'browser tab')
+  + ' · ' + (navigator.onLine ? 'online' : 'OFFLINE') + ' · ' + navigator.userAgent);
+addEventListener('error', e => diag('ERROR ' + e.message + ' @' + e.lineno));
+addEventListener('unhandledrejection', e => diag('ERROR (promise) ' + (e.reason && (e.reason.code || e.reason.message) || e.reason)));
+document.addEventListener('visibilitychange', () => diag('page ' + (document.hidden ? 'hidden' : 'visible')));
+addEventListener('pageshow', e => { if (e.persisted) diag('page restored from memory'); });
+addEventListener('online', () => diag('network online'));
+addEventListener('offline', () => diag('network OFFLINE'));
 const STATIONS = [
   { id: 'main',         name: 'Main',         code: 'halloween_radio_main',         url: 'https://radio1.streamserver.link/radio/8000/hrm-mp3', type: 'audio/mpeg',
     lite: 'https://radio1.streamserver.link/radio/8000/hrm-aac' },
@@ -445,6 +486,7 @@ function chooseStation(s) {
 
 // ── Casting ─────────────────────────────────────
 window.__onGCastApiAvailable = function (available) {
+  diag('cast library ready: ' + (available && window.cast && cast.framework ? 'yes' : 'NO'));
   // The cast library can half-load when offline, so check the framework is really there.
   if (!available || !window.cast || !cast.framework) {
     if (navigator.onLine) showNotice('Casting to speakers needs Chrome (Android or computer). Listening on this device works everywhere.');
@@ -457,11 +499,17 @@ window.__onGCastApiAvailable = function (available) {
     autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
     resumeSavedSession: true,
   });
+  diag('cast state at start: ' + ctx.getCastState() + (ctx.getCurrentSession() ? ' · already joined ' + ctx.getCurrentSession().getCastDevice().friendlyName : ''));
   player = new cast.framework.RemotePlayer();
   ctrl = new cast.framework.RemotePlayerController(player);
 
   ctrl.addEventListener(cast.framework.RemotePlayerEventType.ANY_CHANGE, () => { onSpeakerState(); render(); });
-  ctx.addEventListener(cast.framework.CastContextEventType.CAST_STATE_CHANGED, render);
+  ctx.addEventListener(cast.framework.CastContextEventType.CAST_STATE_CHANGED, e => { diag('cast state: ' + e.castState); render(); });
+  ctx.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED, e => {
+    const s = e.session;
+    diag('session: ' + e.sessionState + (e.errorCode ? ' · error ' + e.errorCode : '')
+      + (s ? ' · ' + s.getCastDevice().friendlyName : ''));
+  });
   ctx.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED, e => {
     const S = cast.framework.SessionState;
     // A speaker was picked: whatever the phone was playing moves over to it.
@@ -506,7 +554,11 @@ function loadStation(s, stream = { url: s.url, type: s.type }, isBackup = false)
   req.autoplay = true;
   hideNotice();
   speakerLoading = s;
-  session.loadMedia(req).then(kickStart).catch(err => {
+  const t = performance.now();
+  loadStartedAt = t;
+  diag('sending ' + s.name + ' to ' + session.getCastDevice().friendlyName + ' · ' + stream.url);
+  session.loadMedia(req).then(() => { diag('speaker accepted ' + s.name + ' after ' + ((performance.now() - t) / 1000).toFixed(2) + 's'); kickStart(); }).catch(err => {
+    diag('speaker REFUSED ' + s.name + ' after ' + ((performance.now() - t) / 1000).toFixed(2) + 's · ' + err);
     const backup = !isBackup && backupFor(s, stream.url);
     if (backup) { loadStation(s, backup, true); return; }
     speakerLoading = null;
@@ -528,6 +580,7 @@ function kickStart() {
     const PS = chrome.cast.media.PlayerState;
     if (!media || !speakerLoading || player.playerState === PS.PLAYING || player.playerState === PS.IDLE) return;
     kicking = true;
+    diag('nudging speaker (pause + play), it was ' + player.playerState);
     const done = () => { kicking = false; render(); };
     media.pause(new chrome.cast.media.PauseRequest(),
       () => media.play(new chrome.cast.media.PlayRequest(), done, done), done);
@@ -536,9 +589,17 @@ function kickStart() {
 
 // Watches the speaker: notes when it's really playing, and restarts the channel if its stream drops.
 let lastSpeakerState = null;
+let loadStartedAt = 0;
 function onSpeakerState() {
   const PS = chrome.cast.media.PlayerState;
   if (player.playerState === lastSpeakerState) return;
+  {
+    const session = ctx.getCurrentSession();
+    const media = session && session.getMediaSession && session.getMediaSession();
+    diag('speaker player: ' + (player.playerState || 'none')
+      + (player.playerState === PS.IDLE && media && media.idleReason ? ' (' + media.idleReason + ')' : '')
+      + (loadStartedAt ? ' · ' + ((performance.now() - loadStartedAt) / 1000).toFixed(2) + 's since sending' : ''));
+  }
   lastSpeakerState = player.playerState;
   if (player.playerState === PS.PLAYING) {
     const r = remoteStation();
@@ -574,7 +635,11 @@ function remoteStation() {
 els.castBtn.addEventListener('click', () => {
   if (!ctx) return;
   // requestSession opens Chrome's device picker (speakers and groups); when connected it lets you switch or stop.
-  ctx.requestSession().catch(() => {});
+  const t = performance.now();
+  diag('cast button tapped (state ' + ctx.getCastState() + ')');
+  ctx.requestSession().then(
+    () => diag('speaker picked, connected after ' + ((performance.now() - t) / 1000).toFixed(2) + 's'),
+    err => diag('connect FAILED after ' + ((performance.now() - t) / 1000).toFixed(2) + 's · ' + err));
 });
 
 // Pause rather than stop, like the Google Home app: the speaker keeps its connection to the
@@ -622,6 +687,31 @@ els.vol.addEventListener('input', () => {
 els.disconnectBtn.addEventListener('click', () => {
   if (ctx && ctx.getCurrentSession()) ctx.endCurrentSession(true);
 });
+
+// Tap the title 5 times within 3 seconds to open the diagnostic log.
+{
+  const dlg = $('diagDlg'), text = $('diagText');
+  let taps = [];
+  document.querySelector('h1').addEventListener('click', () => {
+    const now = Date.now();
+    taps = taps.filter(x => now - x < 3000).concat(now);
+    if (taps.length < 5) return;
+    taps = [];
+    text.textContent = diagLines.join('\n') || '(empty)';
+    dlg.showModal();
+    text.scrollTop = text.scrollHeight;
+  });
+  $('diagCopy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(diagLines.join('\n')); $('diagCopy').textContent = 'Copied ✓'; }
+    catch (e) { getSelection().selectAllChildren(text); $('diagCopy').textContent = 'Selected: copy it'; }
+    setTimeout(() => { $('diagCopy').textContent = 'Copy log'; }, 2500);
+  });
+  $('diagClear').addEventListener('click', () => {
+    diagLines = [];
+    try { localStorage.removeItem(DIAG_KEY); } catch (e) {}
+    text.textContent = '(empty)';
+  });
+}
 
 const premiumBtn = $('premiumBtn');
 const premiumDlg = $('premiumDlg');
