@@ -522,11 +522,13 @@ window.__onGCastApiAvailable = function (available) {
   ctx.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED, e => {
     const S = cast.framework.SessionState;
     // A speaker was picked: whatever the phone was playing moves over to it.
-    if (e.sessionState === S.SESSION_STARTED && localStation) {
-      const s = localStation;
+    if (e.sessionState === S.SESSION_STARTED && (localStation || carryAfterUnjam)) {
+      const s = localStation || carryAfterUnjam;
+      carryAfterUnjam = null;
       stopHere();
       loadStation(s);
     }
+    if (e.sessionState === S.SESSION_STARTED) { try { sessionStorage.removeItem(UNJAM_KEY); } catch (err) {} }
     if (e.sessionState === S.SESSION_START_FAILED) {
       showNotice('The speaker didn’t accept the connection. Try again.');
     }
@@ -678,21 +680,32 @@ els.castBtn.addEventListener('click', () => {
 const UNJAM_KEY = 'hc_unjam';
 let castListOpen = false;
 function unjamCasting() {
-  let last = 0;
-  try { last = +sessionStorage.getItem(UNJAM_KEY) || 0; } catch (e) {}
+  const last = readUnjam().at;
   if (Date.now() - last < 30000) {   // already refreshed just now: don't loop
     showNotice('Couldn’t connect to the speaker. Pull down to refresh and try again.');
     return;
   }
-  try { sessionStorage.setItem(UNJAM_KEY, String(Date.now())); } catch (e) { return; }
-  diag('speaker list got cut off by the phone re-scanning: refreshing the app');
+  // Remember what the phone was playing, so it carries on and still moves to the speaker.
+  try { sessionStorage.setItem(UNJAM_KEY, JSON.stringify({ at: Date.now(), playing: localStation ? localStation.id : null })); }
+  catch (e) { return; }
+  diag('speaker list got cut off by the phone re-scanning: refreshing the app'
+    + (localStation ? ' (phone was playing ' + localStation.name + ')' : ''));
   location.reload();
 }
+let carryAfterUnjam = null;   // what the phone was playing before the refresh: goes to the speaker
+function readUnjam() {
+  try { return JSON.parse(sessionStorage.getItem(UNJAM_KEY)) || { at: 0 }; } catch (e) { return { at: 0 }; }
+}
 function afterUnjam() {
-  let at = 0;
-  try { at = +sessionStorage.getItem(UNJAM_KEY) || 0; } catch (e) {}
-  if (!at || Date.now() - at > 30000) return;
-  diag('refreshed to unjam casting, ready for another tap');
+  const u = readUnjam();
+  if (!u.at || Date.now() - u.at > 30000) return;
+  const s = u.playing && STATIONS.find(x => x.id === u.playing);
+  diag('refreshed to unjam casting, ready for another tap' + (s ? ' · carrying on with ' + s.name : ''));
+  if (s) {
+    carryAfterUnjam = s;
+    playHere(s);   // keep the music going on the phone until the speaker is picked
+    setTimeout(() => { if (carryAfterUnjam === s) carryAfterUnjam = null; }, 60000);
+  }
   showNotice('Ready. Tap the cast button again to pick your speaker.');
   els.castBtn.classList.add('nudge');
 }
@@ -867,6 +880,7 @@ function reconnectHere() {
 }
 
 function playHere(s) {
+  diag('playing ' + s.name + ' on this device');
   selected = s;
   localStation = s;
   hereLive = false;
@@ -887,6 +901,7 @@ function playHere(s) {
 
 function stopHere() {
   if (!localStation) return;
+  diag('stopped ' + localStation.name + ' on this device');
   localStation = null;
   hereLive = false;
   clearRetry(); retry = 0; reconnecting = false; autoLite = false;
