@@ -581,7 +581,7 @@ function loadStation(s, stream = { url: s.url, type: s.type }, isBackup = false)
 // ~25 seconds before the sound really starts (seen in the diagnostic log). A quick pause and
 // play gets it going at once (found by hand), so while a channel is starting the app watches
 // for that stall and nudges the speaker itself, up to 4 times.
-const NUDGE_AFTER = 1500;     // stalled this long: nudge
+const NUDGE_AFTER = 500;      // stalled this long: nudge (the first brief buffering lasts under 0.1s)
 const NUDGE_WINDOW = 60000;   // only while a channel is starting up
 let nudgeUntil = 0, nudges = 0, nudgeTimer = null;
 let kicking = false;   // mid-nudge: don't show the speaker as paused
