@@ -337,7 +337,7 @@
     <button class="ghost" id="premiumBtn">Add Premium</button>
   </div>
 
-  <footer>Unofficial remote. Music streamed from <a href="https://halloweenradio.net" target="_blank" rel="noopener">halloweenradio.net</a>.</footer>
+  <footer>Unofficial remote. Music streamed from <a href="https://halloweenradio.net" target="_blank" rel="noopener">halloweenradio.net</a>. <span id="ver"></span></footer>
 </main>
 
 <dialog id="diagDlg">
@@ -371,6 +371,7 @@
 </dialog>
 
 <script>
+const VERSION = '2.0';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -386,7 +387,7 @@ function diag(msg) {
   if (diagLines.length > 400) diagLines = diagLines.slice(-400);
   try { localStorage.setItem(DIAG_KEY, JSON.stringify(diagLines)); } catch (e) {}
 }
-diag('──── app opened · version ' + document.lastModified + ' · ' + (window.AndroidCast ? 'Halloween Caster Android app' : matchMedia('(display-mode: standalone)').matches ? 'home-screen app' : 'browser tab')
+diag('──── app opened · v' + VERSION + ' (' + document.lastModified + ') · ' + (window.AndroidCast ? 'Halloween Caster Android app' : matchMedia('(display-mode: standalone)').matches ? 'home-screen app' : 'browser tab')
   + ' · ' + (navigator.onLine ? 'online' : 'OFFLINE') + ' · ' + navigator.userAgent);
 addEventListener('error', e => diag('ERROR ' + e.message + ' @' + e.lineno));
 addEventListener('unhandledrejection', e => diag('ERROR (promise) ' + (e.reason && (e.reason.code || e.reason.message) || e.reason)));
@@ -434,6 +435,7 @@ if (premiumUrl) {
 }
 
 const $ = id => document.getElementById(id);
+$('ver').textContent = 'v' + VERSION;
 const els = {
   castBtn: $('castBtn'), spineLink: $('spineLink'), castLabel: $('castLabel'), notice: $('notice'),
   artWrap: $('artWrap'), nowStation: $('nowStation'), nowTitle: $('nowTitle'),
