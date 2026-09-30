@@ -781,6 +781,26 @@ els.disconnectBtn.addEventListener('click', () => {
   });
 }
 
+// On a computer, links out (Bewitch on site, Spine-Tingler, YouTube…) open in a small window
+// beside the app instead of a new tab. Ctrl/Shift-click still opens a normal tab. Phones keep their usual behavior.
+{
+  const computer = matchMedia('(pointer: fine)').matches && !/Android|iPhone|iPad/i.test(navigator.userAgent);
+  document.addEventListener('click', e => {
+    const a = e.target.closest('a[target="_blank"]');
+    if (!a || !computer || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    const w = Math.min(560, screen.availWidth - 40), h = Math.min(820, screen.availHeight - 80);
+    const x = window.screenX || 0, right = x + window.outerWidth + 10;
+    const left = right + w <= screen.availWidth ? right : Math.max(0, x + window.outerWidth - w - 30);
+    const top = Math.max(0, (window.screenY || 0) + 60);
+    const win = window.open(a.href, 'hc_site', `popup,width=${w},height=${h},left=${left},top=${top}`);
+    if (!win) return;   // pop-up blocked: let the link open as a normal tab
+    e.preventDefault();
+    try { win.opener = null; } catch (err) {}
+    win.focus();
+    diag('opened in a small window: ' + a.href);
+  });
+}
+
 const premiumBtn = $('premiumBtn');
 const premiumDlg = $('premiumDlg');
 const premiumMsg = $('premiumMsg');
