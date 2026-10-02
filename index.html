@@ -371,7 +371,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.0';
+const VERSION = '2.0.1';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -1162,7 +1162,9 @@ async function pollStations(list) {
         title: song.title || '', artist: song.artist || '', art: song.art || '',
         listeners: d.listeners ? d.listeners.current : null,
         duration: (d.now_playing && d.now_playing.duration) || 0,
-        startedAt: Date.now() - ((d.now_playing && d.now_playing.elapsed) || 0) * 1000,
+        // The feed is a file saved every so often, so its "elapsed" can be well behind; the time the song
+        // started (played_at) doesn't go stale. That keeps the candle in step on long tracks (like Atmosphere's).
+        startedAt: d.now_playing && d.now_playing.played_at ? d.now_playing.played_at * 1000 : Date.now() - ((d.now_playing && d.now_playing.elapsed) || 0) * 1000,
         dj: d.live && d.live.is_live ? (d.live.streamer_name || 'a DJ') : '',
         online: d.is_online !== false,
         next: songEntry(d.playing_next),
