@@ -250,6 +250,8 @@
   }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
+<!-- Visit counter (GoatCounter: free, no cookies). Diag log has a "Don't count me" switch. -->
+<script data-goatcounter="https://cc666debug.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
 </head>
 <body>
 <main>
@@ -348,6 +350,7 @@
     <div class="row">
       <button class="ghost" type="button" id="diagClear">Clear</button>
       <button class="ghost" type="button" id="diagCopy">Copy log</button>
+      <button class="ghost" type="button" id="gcSkip"></button>
       <button class="primary" value="close" autofocus>Close</button>
     </div>
   </form>
@@ -371,7 +374,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.0.1';
+const VERSION = '2.1.0';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -775,6 +778,19 @@ els.disconnectBtn.addEventListener('click', () => {
     try { await navigator.clipboard.writeText(diagLines.join('\n')); $('diagCopy').textContent = 'Copied ✓'; }
     catch (e) { getSelection().selectAllChildren(text); $('diagCopy').textContent = 'Selected: copy it'; }
     setTimeout(() => { $('diagCopy').textContent = 'Copy log'; }, 2500);
+  });
+  // GoatCounter skips counting when localStorage skipgc = 't' (shared by all the apps on this site)
+  const gcLabel = () => {
+    let off = false; try { off = localStorage.getItem('skipgc') === 't'; } catch (e) {}
+    $('gcSkip').textContent = off ? 'Count me' : "Don't count me";
+  };
+  gcLabel();
+  $('gcSkip').addEventListener('click', () => {
+    try {
+      if (localStorage.getItem('skipgc') === 't') localStorage.removeItem('skipgc');
+      else localStorage.setItem('skipgc', 't');
+    } catch (e) {}
+    gcLabel();
   });
   $('diagClear').addEventListener('click', () => {
     diagLines = [];
