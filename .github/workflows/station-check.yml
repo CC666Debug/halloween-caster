@@ -1,0 +1,30 @@
+# Once a week, GitHub checks every channel's stream and song info, and opens an issue only if something's broken.
+# Free on public repos (no minutes are billed); switch it off any time under the repo's Actions tab.
+name: Weekly station check
+on:
+  schedule:
+    - cron: '0 16 * * 1'   # Mondays, around noon US Eastern
+  workflow_dispatch:        # plus a "Run workflow" button for a check on demand
+permissions:
+  contents: read
+  issues: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check the stations
+        run: python .github/scripts/check_stations.py > report.txt
+      - name: Post the report if something's broken
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat report.txt
+          if [ "$(head -n 1 report.txt)" = "PROBLEMS" ]; then
+            tail -n +2 report.txt > report.md
+            gh issue create --title "Station check $(date +'%b %d, %Y')" --body-file report.md
+          fi
