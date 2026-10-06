@@ -145,6 +145,7 @@
     background: var(--surface-2); border: 1px solid var(--line); color: var(--text);
     border-radius: 999px; padding: 9px 10px;
   }
+  .backup { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 2px; }
   .pill.saved { border-color: var(--accent); color: var(--accent); }
 
   .drawer { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 16px; }
@@ -327,6 +328,12 @@
     <summary>❤️ Favorites <span id="favCount"></span></summary>
     <ul id="favList"></ul>
     <p class="empty" id="favEmpty">Tap “Save” while a song plays to keep it here.</p>
+    <div class="backup">
+      <button class="pill" id="favBackup">⬇️ Back up</button>
+      <button class="pill" id="favRestore">⬆️ Restore</button>
+      <input type="file" id="favFile" accept=".md,text/markdown,text/plain" hidden>
+    </div>
+    <p class="empty" id="backupMsg"></p>
   </details>
 
   <div class="row">
@@ -374,7 +381,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.1.1';
+const VERSION = '2.2.0';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -405,7 +412,7 @@ const STATIONS = [
     lite: 'https://radio1.streamserver.link/radio/8020/hro-aac' },
   { id: 'kids',         name: 'Kids',         code: 'halloween_radio_kids',         url: 'https://radio1.streamserver.link/radio/8030/hrk-mp3', type: 'audio/mpeg',
     lite: 'https://radio1.streamserver.link/radio/8030/hrk-aac' },
-  { id: 'movies',       name: 'Movies',       code: 'halloween_radio_soundtracks',       url: 'https://radio1.streamserver.link/radio/8050/hrs-mp3', type: 'audio/mpeg',
+  { id: 'movies',       name: 'Soundtracks',  code: 'halloween_radio_soundtracks',       url: 'https://radio1.streamserver.link/radio/8050/hrs-mp3', type: 'audio/mpeg',
     lite: 'https://radio1.streamserver.link/radio/8050/hrs-aac' },
   { id: 'atmosphere',   name: 'Atmosphere',   code: 'halloween_radio_atmosphere',   url: 'https://radio1.streamserver.link/radio/8040/hra-mp3', type: 'audio/mpeg',
     lite: 'https://radio1.streamserver.link/radio/8040/hra-aac' },
@@ -1151,6 +1158,46 @@ function renderFavs() {
   });
 }
 renderFavs();
+
+// Favorites backup: a small Markdown file to keep anywhere, and load back after a reinstall or on another phone.
+{
+  const msg = t => { $('backupMsg').textContent = t; };
+  const day = t => { const d = new Date(t); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };   // local date
+  $('favBackup').addEventListener('click', () => {
+    if (!favs.length) { msg('No favorites to back up yet.'); return; }
+    const md = '# Halloween Caster · favorites\n\nBacked up ' + new Date().toLocaleString() + ' · ' + favs.length + (favs.length === 1 ? ' song' : ' songs')
+      + '\n\n' + favs.map(f => '- **' + f.title + '** · ' + (f.artist || '') + ' · ' + (f.station || '') + ' · ' + day(f.at)).join('\n') + '\n';
+    const name = 'halloween-caster-favorites-' + day(Date.now()) + '.md';
+    if (window.AndroidCast && window.AndroidCast.saveFile) {   // the Android app saves it to Downloads itself
+      msg(window.AndroidCast.saveFile(name, md) ? 'Saved to Downloads as ' + name : 'Couldn’t save the backup file.');
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([md], { type: 'text/markdown' }));
+    a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    msg('Backup downloaded as ' + name);
+  });
+  $('favRestore').addEventListener('click', () => $('favFile').click());
+  $('favFile').addEventListener('change', async e => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    let added = 0;
+    for (const line of (await file.text()).split(/\r?\n/)) {
+      // - **Title** · Artist · Station · 2026-10-06
+      const m = line.match(/^- \*\*(.+)\*\* · (.*) · (.*) · (\d{4}-\d{2}-\d{2})\s*$/);
+      if (!m) continue;
+      const x = { title: m[1], artist: m[2], station: m[3], at: Date.parse(m[4] + 'T12:00:00') || Date.now() };
+      if (isFav(x)) continue;
+      favs.push(x); added++;
+    }
+    favs.sort((a, b) => b.at - a.at);
+    saveFavs();
+    msg(added ? 'Restored ' + added + (added === 1 ? ' song.' : ' songs.') : 'No new songs in that file.');
+  });
+}
 
 // ── Now playing (station's public feed) ─────────
 // The channel on screen is checked every 15 seconds and the others once a minute:
