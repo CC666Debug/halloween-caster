@@ -2,7 +2,7 @@
 // The page itself is fetched fresh when online (so updates show up right away, even though
 // GitHub Pages tells browsers they may reuse it for 10 minutes);
 // the saved copy is only used when the network fails. Streams and song info are never cached.
-const CACHE = 'hc-v7';   // bump when cached files change (v2: new app icon; v3: song timing fix; v4: visit counter; v5: Movies song info renamed to soundtracks; v6: favorites backup; v7: volume extras)
+const CACHE = 'hc-v8';   // bump when cached files change (v2: new app icon; v3: song timing fix; v4: visit counter; v5: Movies song info renamed to soundtracks; v6: favorites backup; v7: volume extras; v8: Cauldron channel, Premium renamed Phantom)
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'favicon.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
