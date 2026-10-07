@@ -122,7 +122,7 @@
   #muteBtn.blaring #muteIcon .w3.on { animation-delay: .3s; }
   @keyframes blare { 0% { opacity: .35; } 30% { opacity: 1; } 100% { opacity: .5; } }
   @media (prefers-reduced-motion: reduce) { #muteBtn.blaring #muteIcon .wave.on { animation: none; } }
-  .volnum { min-width: 42px; margin-left: -10px; font-size: 15px; font-weight: 800; color: var(--accent); text-shadow: 0 0 4px var(--accent), 0 0 12px var(--accent); font-variant-numeric: tabular-nums; }
+  .volnum { min-width: 42px; margin-left: -6px; font-size: 15px; font-weight: 800; color: var(--accent); text-shadow: 0 0 4px var(--accent), 0 0 12px var(--accent); font-variant-numeric: tabular-nums; }
   .volnum:empty { display: none; }
   .volpop {
     position: fixed; z-index: 60; width: 56px; height: 200px; padding: 10px 0 12px; border-radius: 28px;
@@ -155,6 +155,12 @@
   .station.off { opacity: .5; }
 
   .row { display: flex; gap: 10px; }
+  /* The volume is set by holding 🔊 (the slider stays hidden), so Sleep and Data saver sit in the player row. */
+  #vol { display: none; }
+  .controls { gap: 8px; padding: 12px; }
+  .controls .spacer { flex: 1; min-width: 0; }
+  .ghost.mini { flex: none; padding: 6px 8px; border-radius: 14px; white-space: nowrap; line-height: 1.25; font-size: 13px; }
+  .ghost.mini small { display: block; font-size: 12px; opacity: .8; }
   .ghost.on { border-color: var(--accent); color: var(--accent); }
   .ghost {
     flex: 1; background: none; border: 1px solid var(--line); border-radius: 12px;
@@ -338,6 +344,9 @@
     <span class="volnum" id="volNum"></span>
     <label class="sr" for="vol">Speaker volume</label>
     <input type="range" id="vol" min="0" max="100" step="1" value="50" disabled>
+    <span class="spacer"></span>
+    <button class="ghost mini" id="sleepBtn">🌙 Sleep<small>off</small></button>
+    <button class="ghost mini" id="saverBtn" aria-pressed="false">📶 Data saver<small>off</small></button>
   </section>
 
   <section class="stations" id="stations" aria-label="Channels"></section>
@@ -366,10 +375,6 @@
     <p class="empty" id="backupMsg"></p>
   </details>
 
-  <div class="row">
-    <button class="ghost" id="sleepBtn">🌙 Sleep: off</button>
-    <button class="ghost" id="saverBtn" aria-pressed="false">📶 Data saver: off</button>
-  </div>
 
   <div class="row">
     <button class="ghost" id="disconnectBtn" disabled>Disconnect</button>
@@ -411,7 +416,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.4.0';
+const VERSION = '2.5.0';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -1072,7 +1077,7 @@ audio.addEventListener('error', () => {
 const saverBtn = $('saverBtn');
 function renderSaver() {
   const auto = !dataSaver && (autoLite || weakSignal());
-  saverBtn.textContent = '📶 Data saver: ' + (dataSaver ? 'on' : auto ? 'auto' : 'off');
+  saverBtn.innerHTML = '📶 Data saver<small>' + (dataSaver ? 'on' : auto ? 'auto' : 'off') + '</small>';
   saverBtn.classList.toggle('on', dataSaver || auto);
   saverBtn.setAttribute('aria-pressed', String(dataSaver));
 }
@@ -1162,9 +1167,9 @@ function checkSleep() {
   } else if (sleepAt && left <= FADE_MS && (localStation || speakerIsOurs() || fade)) {
     fadeTo(left / FADE_MS);
   }
-  els.sleepBtn.textContent = sleepAt
-    ? '🌙 ' + Math.ceil((sleepAt - Date.now()) / 60000) + ' min left'
-    : '🌙 Sleep: off';
+  els.sleepBtn.innerHTML = '🌙 Sleep<small>' + (sleepAt
+    ? Math.ceil((sleepAt - Date.now()) / 60000) + ' min left'
+    : 'off') + '</small>';
   els.sleepBtn.classList.toggle('on', !!sleepAt);
 }
 setInterval(checkSleep, 1000);   // every second, so the fade is smooth
