@@ -416,7 +416,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.5.0';
+const VERSION = '2.5.1';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -1276,10 +1276,15 @@ renderFavs();
     if (!file) return;
     let added = 0;
     for (const line of (await file.text()).split(/\r?\n/)) {
-      // - **Title** · Artist · Station · 2026-10-06
-      const m = line.match(/^- \*\*(.+)\*\* · (.*) · (.*) · (\d{4}-\d{2}-\d{2})\s*$/);
-      if (!m) continue;
-      const x = { title: m[1], artist: m[2], station: m[3], at: Date.parse(m[4] + 'T12:00:00') || Date.now() };
+      // This app's backups:  - **Title** · Artist · Station · 2026-10-06
+      // Four Realms backups:  - **Artist – Title** · Station · 2026-10-06
+      let x = null, m = line.match(/^- \*\*(.+)\*\* · (.*) · (.*) · (\d{4}-\d{2}-\d{2})\s*$/);
+      if (m) x = { title: m[1], artist: m[2], station: m[3], at: Date.parse(m[4] + 'T12:00:00') || Date.now() };
+      else if ((m = line.match(/^- \*\*(.+)\*\* · (.*) · (\d{4}-\d{2}-\d{2})\s*$/))) {
+        const i = m[1].indexOf(' – ');
+        x = { title: i < 0 ? m[1] : m[1].slice(i + 3), artist: i < 0 ? '' : m[1].slice(0, i), station: m[2], at: Date.parse(m[3] + 'T12:00:00') || Date.now() };
+      }
+      if (!x) continue;
       if (isFav(x)) continue;
       favs.push(x); added++;
     }
