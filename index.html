@@ -146,10 +146,10 @@
   .station .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); display: none; }
   .station .song { font-size: 13px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .station.active { border-color: var(--accent); background: var(--surface-2); }
-  /* An odd card out on the last row (like Premium as the 7th channel) sits in the middle. */
+  /* An odd card out on the last row (like Cauldron as the 7th channel) sits in the middle. */
   .station:last-child:nth-child(odd) { grid-column: 1 / -1; justify-self: center; width: calc(50% - 5px); }
   .station.active .dot { display: inline-block; }
-  /* A channel left alone on the last row (like Premium) sits in the middle. */
+  /* A channel left alone on the last row (like Cauldron) sits in the middle. */
   .station:last-child:nth-child(odd) { grid-column: 1 / -1; justify-self: center; width: calc(50% - 5px); }
   .station .onair { font-size: 11px; font-weight: 700; color: #ff5a5a; white-space: nowrap; }
   .station.off { opacity: .5; }
@@ -373,7 +373,7 @@
 
   <div class="row">
     <button class="ghost" id="disconnectBtn" disabled>Disconnect</button>
-    <button class="ghost" id="premiumBtn">Add Premium</button>
+    <button class="ghost" id="premiumBtn">Add Phantom</button>
   </div>
 
   <footer>Unofficial remote. Music streamed from <a href="https://halloweenradio.net" target="_blank" rel="noopener">halloweenradio.net</a>. <span id="ver"></span></footer>
@@ -395,13 +395,13 @@
 
 <dialog id="premiumDlg">
   <form method="dialog" id="premiumForm" novalidate>
-    <h2>⭐ Premium channel</h2>
+    <h2>⭐ Phantom channel</h2>
     <div id="premiumAdd">
-      <p>For Halloween Radio supporters. Paste your Premium stream link from halloweenradio.net. It stays on this phone and is never shared.</p>
-      <label class="sr" for="premiumUrl">Premium stream link</label>
+      <p>For Halloween Radio supporters. Paste your Phantom stream link from halloweenradio.net (it used to be called Premium). It stays on this phone and is never shared.</p>
+      <label class="sr" for="premiumUrl">Phantom stream link</label>
       <input id="premiumUrl" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…">
     </div>
-    <p id="premiumHave" hidden>Premium is set up on this phone. Removing it only deletes the link from this phone.</p>
+    <p id="premiumHave" hidden>Phantom is set up on this phone. Removing it only deletes the link from this phone.</p>
     <p class="msg" id="premiumMsg" role="status"></p>
     <div class="row">
       <button class="ghost" value="cancel" formnovalidate>Cancel</button>
@@ -411,7 +411,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.3.0';
+const VERSION = '2.4.0';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -447,9 +447,10 @@ const STATIONS = [
   { id: 'atmosphere',   name: 'Atmosphere',   code: 'halloween_radio_atmosphere',   url: 'https://radio1.streamserver.link/radio/8040/hra-mp3', type: 'audio/mpeg',
     lite: 'https://radio1.streamserver.link/radio/8040/hra-aac' },
   { id: 'instrumental', name: 'Instrumental', code: 'halloween_radio_instrumental', url: 'https://radio1.streamserver.link/radio/8100/hri-aac', type: 'audio/aac' },
+  { id: 'cauldron',     name: 'Cauldron',     code: 'halloween_radio_cauldron',     url: 'https://radio1.streamserver.link/radio/8140/hrc-aac', type: 'audio/aac' },
 ];
-// Spine-Tingler (rate how spooky the song feels) opens on the same channel. Premium has no tab there.
-const SPINE = { main: 'hrm', oldies: 'hro', kids: 'hrk', movies: 'hrs', atmosphere: 'hra', instrumental: 'hri' };
+// Spine-Tingler (rate how spooky the song feels) opens on the same channel. Phantom has no tab there.
+const SPINE = { main: 'hrm', oldies: 'hro', kids: 'hrk', movies: 'hrs', atmosphere: 'hra', instrumental: 'hri', cauldron: 'hrc' };
 const spineUrl = s => 'https://halloweenradio.net/spine-tingler' + (SPINE[s.id] ? '?station=' + SPINE[s.id] : '');
 const NOW_PLAYING = code => `https://radio1.streamserver.link/api/nowplaying_static/${code}.json`;
 const POLL_MS = 15000;
@@ -466,11 +467,12 @@ const streamFor = s => useLite() && s.lite ? { url: s.lite, type: 'audio/aac' } 
 // The other version of the same channel, used as a backup if one won't play.
 const backupFor = (s, url) => !s.lite ? null : url === s.lite ? { url: s.url, type: s.type } : { url: s.lite, type: 'audio/aac' };
 
-// Premium is for supporters: its link is pasted once and kept only on this device, never in this public code.
+// Phantom (once called Premium) is for supporters. Its id and saved key keep the old name, so links saved before the rename still work.
+// its link is pasted once and kept only on this device, never in this public code.
 const PREMIUM_KEY = 'hc_premium_url';
 const premiumUrl = safeGet(PREMIUM_KEY);
 if (premiumUrl) {
-  STATIONS.push({ id: 'premium', name: 'Premium ⭐', code: 'halloween_radio_premium', url: premiumUrl,
+  STATIONS.push({ id: 'premium', name: 'Phantom ⭐', code: 'halloween_radio_premium', url: premiumUrl,
                   type: /mp3/i.test(premiumUrl) ? 'audio/mpeg' : 'audio/aac' });
 }
 
@@ -913,7 +915,7 @@ const premiumBtn = $('premiumBtn');
 const premiumDlg = $('premiumDlg');
 const premiumMsg = $('premiumMsg');
 const premiumGo = $('premiumGo');
-premiumBtn.textContent = premiumUrl ? '⭐ Premium: on' : 'Add Premium';
+premiumBtn.textContent = premiumUrl ? '⭐ Phantom: on' : 'Add Phantom';
 premiumBtn.classList.toggle('on', !!premiumUrl);
 
 let premiumFailed = '';   // a link that failed the test; tapping again saves it anyway
@@ -921,7 +923,7 @@ let premiumFailed = '';   // a link that failed the test; tapping again saves it
 premiumBtn.addEventListener('click', () => {
   $('premiumAdd').hidden = !!premiumUrl;
   $('premiumHave').hidden = !premiumUrl;
-  premiumGo.textContent = premiumUrl ? 'Remove Premium' : 'Test & save';
+  premiumGo.textContent = premiumUrl ? 'Remove Phantom' : 'Test & save';
   $('premiumUrl').value = '';
   premiumMsg.textContent = ''; premiumMsg.className = 'msg';
   premiumFailed = '';
