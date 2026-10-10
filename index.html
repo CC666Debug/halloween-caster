@@ -420,7 +420,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.7.0';
+const VERSION = '2.7.1';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -1161,6 +1161,7 @@ const shareBtn = $('shareBtn');
 shareBtn.addEventListener('click', async () => {
   const url = location.origin + location.pathname;
   const text = '🎃 Halloween Caster: a free app to play Halloween Radio or cast it to your speakers';
+  if (window.AndroidCast && window.AndroidCast.shareText) { window.AndroidCast.shareText('Halloween Caster', text + '\n' + url); return; }   // the phone app's share menu
   if (navigator.share) {
     try { await navigator.share({ title: 'Halloween Caster', text, url }); return; }
     catch (e) { if (e.name === 'AbortError') return; }   // closed the share sheet; otherwise fall back to copying
