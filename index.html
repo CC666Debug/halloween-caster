@@ -420,7 +420,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.8.2';
+const VERSION = '2.9.0';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -1219,30 +1219,56 @@ renderFavs();
       catch (e) { fail(e); }
     };
   });
-  async function saveInFolder(name, md, pickNew) {
+  // Each device keeps one list file that only grows: Back up adds this device's songs to the ones already in it
+  // and never removes any, so a wiped app can't shrink it. (Un-hearted songs stay until deleted from the file.)
+  const listSong = line => {   // a line from either app's list → a favorite
+    let m = line.match(/^- \*\*(.+)\*\* · (.*) · (.*) · (\d{4}-\d{2}-\d{2})\s*$/);
+    if (m) return { title: m[1], artist: m[2], station: m[3], at: Date.parse(m[4] + 'T12:00:00') || Date.now() };
+    if (!(m = line.match(/^- \*\*(.+)\*\* · (.*) · (\d{4}-\d{2}-\d{2})\s*$/))) return null;
+    const i = m[1].indexOf(' – ');
+    return { title: i < 0 ? m[1] : m[1].slice(i + 3), artist: i < 0 ? '' : m[1].slice(0, i), station: m[2], at: Date.parse(m[3] + 'T12:00:00') || Date.now() };
+  };
+  function grownList(old) {
+    const all = [...favs], seen = new Set(favs.map(favKey));
+    for (const line of (old || '').split(/\r?\n/)) {
+      const x = listSong(line);
+      if (x && !seen.has(favKey(x))) { seen.add(favKey(x)); all.push(x); }
+    }
+    all.sort((a, b) => b.at - a.at);
+    return '# Halloween Caster · favorites\n\nBacked up ' + new Date().toLocaleString() + ' · ' + all.length + (all.length === 1 ? ' song' : ' songs')
+      + '\n\n' + all.map(f => '- **' + f.title + '** · ' + (f.artist || '') + ' · ' + (f.station || '') + ' · ' + day(f.at)).join('\n') + '\n';
+  }
+  async function saveInFolder(name, make, pickNew) {
     let dir = pickNew ? null : await db('readonly', kv => kv.get('dir')).catch(() => null);
     if (dir && await dir.requestPermission({ mode: 'readwrite' }) !== 'granted') dir = null;
     if (!dir) {
       dir = await window.showDirectoryPicker({ id: 'hc-backup', mode: 'readwrite', startIn: 'documents' });
       await db('readwrite', kv => kv.put(dir, 'dir')).catch(() => {});
     }
-    const w = await (await dir.getFileHandle(name, { create: true })).createWritable();   // same day on this device = same file, replaced
-    await w.write(md); await w.close();
+    let old = '';   // what this device's list file already holds
+    try { old = await (await (await dir.getFileHandle(name)).getFile()).text(); } catch (e) { if (e.name !== 'NotFoundError') throw e; }
+    const w = await (await dir.getFileHandle(name, { create: true })).createWritable();
+    await w.write(make(old)); await w.close();
     return dir.name;
   }
   window.onAndroidBackup = r => msg(r.ok ? 'Saved in ' + r.where + ' as ' + r.name : r.where === 'cancel' ? 'Backup cancelled.' : 'Couldn’t save the backup file.');
   async function backUp(pickNew) {
     if (!favs.length) { msg('No favorites to back up yet.'); return; }
-    const md = '# Halloween Caster · favorites\n\nBacked up ' + new Date().toLocaleString() + ' · ' + favs.length + (favs.length === 1 ? ' song' : ' songs')
-      + '\n\n' + favs.map(f => '- **' + f.title + '** · ' + (f.artist || '') + ' · ' + (f.station || '') + ' · ' + day(f.at)).join('\n') + '\n';
-    const name = 'halloween-caster-favorites-' + day(Date.now()) + '-' + device() + '.md';
-    if (window.AndroidCast && window.AndroidCast.saveBackup) { window.AndroidCast.saveBackup(name, md, !!pickNew); return; }   // answers through onAndroidBackup
+    const name = 'halloween-caster-favorites-' + device() + '.md';
+    const A = window.AndroidCast;
+    if (A && A.saveBackup) {   // answers through onAndroidBackup
+      let old = '';
+      if (A.readBackup && !pickNew) try { const r = JSON.parse(A.readBackup(name)); if (r.ok) old = r.text; } catch (e) {}
+      A.saveBackup(name, grownList(old), !!pickNew);
+      return;
+    }
+    const md = grownList('');
     if (window.AndroidCast && window.AndroidCast.saveFile) {   // an older Android app saves it to Downloads itself
       msg(window.AndroidCast.saveFile(name, md) ? 'Saved to Downloads as ' + name : 'Couldn’t save the backup file.');
       return;
     }
     if ('showDirectoryPicker' in window) {
-      try { msg('Saved in ' + await saveInFolder(name, md, pickNew) + ' as ' + name); return; }
+      try { msg('Saved in ' + await saveInFolder(name, grownList, pickNew) + ' as ' + name); return; }
       catch (e) { if (e.name === 'AbortError') { msg('Backup cancelled.'); return; } diag('backup folder failed: ' + e.message); }
     }
     const a = document.createElement('a');
