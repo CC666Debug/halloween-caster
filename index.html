@@ -99,10 +99,9 @@
   }
   @media (prefers-reduced-motion: reduce) { .candle .flame { animation: none; } }
 
-  .controls {
-    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-    padding: 14px 16px; display: flex; align-items: center; gap: 14px;
-  }
+  /* Play, volume and the song buttons share one strip at the bottom of the song card. */
+  .controls { grid-column: 1 / -1; display: flex; align-items: center; gap: 4px; }
+  .controls .icon-btn { padding: 8px 6px; }
   .play {
     width: 56px; height: 56px; border-radius: 50%; flex: none;
     background: var(--accent); color: var(--accent-ink); display: grid; place-items: center;
@@ -155,19 +154,27 @@
   .station.off { opacity: .5; }
 
   .row { display: flex; gap: 10px; }
-  /* The volume is set by holding 🔊 (the slider stays hidden), so Disconnect sits in the player row. */
+  /* The volume is set by holding 🔊 (the slider stays hidden). */
   #vol { display: none; }
-  .controls { gap: 8px; padding: 12px; }
   .controls .spacer { flex: 1; min-width: 0; }
-  .ghost.mini { flex: none; padding: 6px 8px; border-radius: 14px; white-space: nowrap; line-height: 1.25; font-size: 13px; }
-  .ghost.mini small { display: block; font-size: 12px; opacity: .8; }
+  .act {
+    flex: none; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 4px 5px;
+    background: none; border-radius: 10px; color: var(--text); text-decoration: none; font-size: 20px; line-height: 1.1;
+  }
+  .act small { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .act.heart { font-size: 24px; padding: 6px; }
+  .act:disabled { opacity: .45; }
+  @media (max-width: 380px) { .controls .play { width: 50px; height: 50px; } .act { padding: 4px 2px; } .act small { font-size: 10px; } }
+  .share-app {
+    background: var(--surface-2); border: 1px solid var(--accent); color: var(--accent);
+    border-radius: 14px; padding: 12px; font-weight: 650;
+  }
+  .share-app small { display: block; color: var(--muted); font-weight: 400; font-size: 13px; }
   .ghost.on { border-color: var(--accent); color: var(--accent); }
   .ghost {
     flex: 1; background: none; border: 1px solid var(--line); border-radius: 12px;
     padding: 10px; color: var(--muted); font-size: 14px;
   }
-  .song-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
-  .song-actions .pill { flex-basis: 40%; }   /* two per row */
   .pill {
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
     flex: 1; text-align: center; text-decoration: none; font-size: 14px;
@@ -326,26 +333,21 @@
       <div class="state" id="nowState">Tap ▶ or a channel to listen</div>
       <div class="next" id="nowNext"></div>
     </div>
-    <div class="song-actions">
-      <button class="pill" id="favBtn" disabled>🤍 Save</button>
-      <button class="pill" id="shareBtn" disabled>📤 Share</button>
-      <a class="pill" id="bewitchLink" href="https://halloweenradio.net/playlist" target="_blank" rel="noopener">👻 Bewitch on site</a>
-      <a class="pill" id="spineLink" href="https://halloweenradio.net/spine-tingler" target="_blank" rel="noopener" title="Rate how spooky this song feels on halloweenradio.net">🦴 Spine-Tingler</a>
+    <div class="controls">
+      <button class="play" id="playBtn" aria-label="Play">
+        <svg viewBox="0 0 24 24" fill="currentColor" id="playIcon"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <button class="icon-btn" id="muteBtn" aria-label="Mute" disabled>
+        <svg viewBox="0 0 24 24" fill="currentColor" id="muteIcon"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4z"/></svg>
+      </button>
+      <span class="volnum" id="volNum"></span>
+      <label class="sr" for="vol">Speaker volume</label>
+      <input type="range" id="vol" min="0" max="100" step="1" value="50" disabled>
+      <span class="spacer"></span>
+      <button class="act heart" id="favBtn" aria-label="Save song" disabled>🤍</button>
+      <a class="act" id="bewitchLink" href="https://halloweenradio.net/playlist" target="_blank" rel="noopener" title="Bewitch (like) songs on halloweenradio.net">👻<small>Bewitch</small></a>
+      <a class="act" id="spineLink" href="https://halloweenradio.net/spine-tingler" target="_blank" rel="noopener" title="Rate how spooky this song feels on halloweenradio.net">🦴<small>Spine-Tingler</small></a>
     </div>
-  </section>
-
-  <section class="controls">
-    <button class="play" id="playBtn" aria-label="Play">
-      <svg viewBox="0 0 24 24" fill="currentColor" id="playIcon"><path d="M8 5v14l11-7z"/></svg>
-    </button>
-    <button class="icon-btn" id="muteBtn" aria-label="Mute" disabled>
-      <svg viewBox="0 0 24 24" fill="currentColor" id="muteIcon"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4z"/></svg>
-    </button>
-    <span class="volnum" id="volNum"></span>
-    <label class="sr" for="vol">Speaker volume</label>
-    <input type="range" id="vol" min="0" max="100" step="1" value="50" disabled>
-    <span class="spacer"></span>
-    <button class="ghost mini" id="disconnectBtn" disabled>🔌 Disconnect<small>speaker</small></button>
   </section>
 
   <section class="stations" id="stations" aria-label="Channels"></section>
@@ -380,6 +382,8 @@
     <button class="ghost" id="saverBtn" aria-pressed="false">📶 Data saver: off</button>
     <button class="ghost" id="premiumBtn">Add Phantom</button>
   </div>
+
+  <button class="share-app" id="shareBtn">📤 Share Halloween Caster<small>Send the app to a friend</small></button>
 
   <footer>Unofficial remote. Music streamed from <a href="https://halloweenradio.net" target="_blank" rel="noopener">halloweenradio.net</a>. <span id="ver"></span></footer>
 </main>
@@ -416,7 +420,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.6.0';
+const VERSION = '2.7.0';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -488,7 +492,7 @@ const els = {
   artWrap: $('artWrap'), nowStation: $('nowStation'), nowTitle: $('nowTitle'),
   nowArtist: $('nowArtist'), nowState: $('nowState'), nowNext: $('nowNext'),
   playBtn: $('playBtn'), playIcon: $('playIcon'), muteBtn: $('muteBtn'), muteIcon: $('muteIcon'),
-  vol: $('vol'), stations: $('stations'), disconnectBtn: $('disconnectBtn'),
+  vol: $('vol'), stations: $('stations'),
 };
 
 const ICONS = {
@@ -853,10 +857,6 @@ els.vol.addEventListener('input', () => {
   btn.title = 'Tap to mute · hold and slide for volume' + (matchMedia('(pointer: fine)').matches ? ' · or scroll over the player' : '');
 }
 
-els.disconnectBtn.addEventListener('click', () => {
-  if (ctx && ctx.getCurrentSession()) ctx.endCurrentSession(true);
-});
-
 // Tap the title 5 times within 3 seconds to open the diagnostic log.
 {
   const dlg = $('diagDlg'), text = $('diagText');
@@ -895,7 +895,7 @@ els.disconnectBtn.addEventListener('click', () => {
   });
 }
 
-// On a computer, links out (Bewitch on site, Spine-Tingler, YouTube…) open in a small window
+// On a computer, links out (Bewitch, Spine-Tingler, YouTube…) open in a small window
 // beside the app instead of a new tab. Ctrl/Shift-click still opens a normal tab. Phones keep their usual behavior.
 {
   const computer = matchMedia('(pointer: fine)').matches && !/Android|iPhone|iPad/i.test(navigator.userAgent);
@@ -1156,20 +1156,19 @@ function toggleFav(song) {
 
 $('favBtn').addEventListener('click', () => { if (currentSong) toggleFav(currentSong); });
 
-// Share what's playing: the phone's share sheet, or copy to the clipboard where there isn't one.
+// Share the app: the phone's share sheet, or copy the link where there isn't one.
 const shareBtn = $('shareBtn');
 shareBtn.addEventListener('click', async () => {
-  if (!currentSong) return;
   const url = location.origin + location.pathname;
-  const text = '🎃 Listening to ' + songText(currentSong) + ' on Halloween Radio (' + currentSong.station + ')';
+  const text = '🎃 Halloween Caster: a free app to play Halloween Radio or cast it to your speakers';
   if (navigator.share) {
     try { await navigator.share({ title: 'Halloween Caster', text, url }); return; }
     catch (e) { if (e.name === 'AbortError') return; }   // closed the share sheet; otherwise fall back to copying
   }
   try {
     await navigator.clipboard.writeText(text + '\n' + url);
-    shareBtn.textContent = '✅ Copied';
-    setTimeout(() => { shareBtn.textContent = '📤 Share'; }, 1800);
+    shareBtn.firstChild.textContent = '✅ Link copied';
+    setTimeout(() => { shareBtn.firstChild.textContent = '📤 Share Halloween Caster'; }, 1800);
   } catch (e) {}
 });
 
@@ -1587,9 +1586,9 @@ function render() {
   const favBtn = $('favBtn');
   const saved = isFav(currentSong);
   favBtn.disabled = !currentSong;
-  favBtn.textContent = saved ? '❤️ Saved' : '🤍 Save';
+  favBtn.textContent = saved ? '❤️' : '🤍';
+  favBtn.setAttribute('aria-label', saved ? 'Saved. Tap to remove' : 'Save song');
   favBtn.classList.toggle('saved', saved);
-  shareBtn.disabled = !currentSong;
 
   let stateText = 'Tap ▶ or a channel to listen';
   let waiting = false;   // a "please wait" state: show how long it's been
@@ -1639,7 +1638,6 @@ function render() {
   // Volume and mute follow the speaker when connected, otherwise this device.
   els.muteBtn.disabled = !connected && !localStation;
   els.vol.disabled = !connected && !localStation;
-  els.disconnectBtn.disabled = !connected;
   if (connected && player && document.activeElement !== els.vol && !volTimer) els.vol.value = Math.round(player.volumeLevel * 100);
   const on = connected || !!localStation;
   const muted = connected ? !!(player && player.isMuted) : audio.muted;
