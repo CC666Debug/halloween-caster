@@ -420,7 +420,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.8.0';
+const VERSION = '2.8.1';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -1148,14 +1148,10 @@ const isFav = s => !!s && favs.some(f => favKey(f) === favKey(s));
 
 function saveFavs() { safeSet(FAV_KEY, JSON.stringify(favs)); renderFavs(); render(); }
 
-let syncMaster = () => {};   // set up with the backup folder below
-
 function toggleFav(song) {
-  const add = !isFav(song);
-  if (add) favs.unshift({ ...song, at: Date.now() });
-  else favs = favs.filter(f => favKey(f) !== favKey(song));
+  if (isFav(song)) favs = favs.filter(f => favKey(f) !== favKey(song));
+  else favs.unshift({ ...song, at: Date.now() });
   saveFavs();
-  syncMaster('hc', { ...song, at: Date.now() }, add);
 }
 
 $('favBtn').addEventListener('click', () => { if (currentSong) toggleFav(currentSong); });
@@ -1196,7 +1192,7 @@ function renderFavs() {
       `<a href="https://open.spotify.com/search/${q}" target="_blank" rel="noopener">Spotify</a>`;
     const del = document.createElement('button'); del.className = 'li-btn'; del.textContent = '✕';
     del.setAttribute('aria-label', 'Remove from favorites');
-    del.addEventListener('click', () => { favs = favs.filter(x => x !== f); saveFavs(); syncMaster('hc', f, false); });
+    del.addEventListener('click', () => { favs = favs.filter(x => x !== f); saveFavs(); });
     li.append(song, del, meta, links);
     list.appendChild(li);
   });
@@ -1231,50 +1227,6 @@ renderFavs();
     await w.write(md); await w.close();
     return dir.name;
   }
-  // Heart taps also add the song to (or take it out of) a master list in the backup folder, so Obsidian
-  // keeps one list for every device. Halloween Radio songs go to Halloween Caster's list, the rest to Four Realms'.
-  // It never asks for a folder: until Back up has picked one on this device, only this app's list changes.
-  const MASTER = {
-    hc: { name: 'halloween-caster-favorites-MASTER.md', head: '# Halloween Caster · favorites',
-          line: x => '- **' + x.title + '** · ' + x.artist + ' · ' + x.station + ' · ' + x.day },
-    fr: { name: 'four-realms-saved-songs-MASTER.md', head: '# Four Realms · saved songs',
-          line: x => '- **' + (x.artist ? x.artist + ' – ' + x.title : x.title) + '** · ' + x.station + ' · ' + x.day },
-  };
-  const songLine = line => {   // a line from either app's list → { title, artist, station, day }
-    let m = line.match(/^- \*\*(.+)\*\* · (.*) · (.*) · (\d{4}-\d{2}-\d{2})\s*$/);
-    if (m) return { title: m[1], artist: m[2], station: m[3], day: m[4] };
-    if (!(m = line.match(/^- \*\*(.+)\*\* · (.*) · (\d{4}-\d{2}-\d{2})\s*$/))) return null;
-    const i = m[1].indexOf(' – ');
-    return { title: i < 0 ? m[1] : m[1].slice(i + 3), artist: i < 0 ? '' : m[1].slice(0, i), station: m[2], day: m[3] };
-  };
-  async function folderIO() {   // reads and writes files in the backup folder; null when there isn't one yet
-    const A = window.AndroidCast;
-    if (A && A.readSaved) return {
-      read: async name => { const r = JSON.parse(A.readSaved(name)); if (!r.ok) throw new Error(r.error || 'no backup folder yet'); return r.text; },
-      write: async (name, text) => { if (!A.writeSaved(name, text)) throw new Error('couldn’t write ' + name); },
-    };
-    if (A || !('showDirectoryPicker' in window)) return null;
-    const dir = await db('readonly', kv => kv.get('dir')).catch(() => null);
-    if (!dir || await dir.requestPermission({ mode: 'readwrite' }) !== 'granted') return null;
-    return {
-      read: async name => { try { return await (await (await dir.getFileHandle(name)).getFile()).text(); } catch (e) { if (e.name === 'NotFoundError') return ''; throw e; } },
-      write: async (name, text) => { const w = await (await dir.getFileHandle(name, { create: true })).createWritable(); await w.write(text); await w.close(); },
-    };
-  }
-  let queue = Promise.resolve();   // one change at a time, so quick taps don't overwrite each other
-  syncMaster = (which, x, add) => { queue = queue.then(async () => {
-    const io = await folderIO();
-    if (!io) return;
-    const m = MASTER[which], key = s => (s.title + '\n' + s.artist).toLowerCase();
-    const song = { title: x.title, artist: x.artist || '', station: x.station || '', day: day(x.at || Date.now()) };
-    const list = (await io.read(m.name)).split(/\r?\n/).map(songLine).filter(Boolean);
-    const has = list.some(s => key(s) === key(song));
-    if (add === has) return;
-    const next = add ? [song, ...list] : list.filter(s => key(s) !== key(song));
-    await io.write(m.name, m.head + '\n\nUpdated ' + new Date().toLocaleString() + ' (master list) · ' + next.length + (next.length === 1 ? ' song' : ' songs')
-      + '\n\n' + next.map(m.line).join('\n') + '\n');
-    diag('master list ' + (add ? 'added ' : 'removed ') + song.title + ' (' + m.name + ')');
-  }).catch(e => diag('master list failed: ' + e.message)); };
   window.onAndroidBackup = r => msg(r.ok ? 'Saved in ' + r.where + ' as ' + r.name : r.where === 'cancel' ? 'Backup cancelled.' : 'Couldn’t save the backup file.');
   async function backUp(pickNew) {
     if (!favs.length) { msg('No favorites to back up yet.'); return; }
