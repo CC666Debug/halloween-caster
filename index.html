@@ -155,7 +155,7 @@
   .station.off { opacity: .5; }
 
   .row { display: flex; gap: 10px; }
-  /* The volume is set by holding 🔊 (the slider stays hidden), so Sleep and Data saver sit in the player row. */
+  /* The volume is set by holding 🔊 (the slider stays hidden), so Disconnect sits in the player row. */
   #vol { display: none; }
   .controls { gap: 8px; padding: 12px; }
   .controls .spacer { flex: 1; min-width: 0; }
@@ -345,8 +345,7 @@
     <label class="sr" for="vol">Speaker volume</label>
     <input type="range" id="vol" min="0" max="100" step="1" value="50" disabled>
     <span class="spacer"></span>
-    <button class="ghost mini" id="sleepBtn">🌙 Sleep<small>off</small></button>
-    <button class="ghost mini" id="saverBtn" aria-pressed="false">📶 Data saver<small>off</small></button>
+    <button class="ghost mini" id="disconnectBtn" disabled>🔌 Disconnect<small>speaker</small></button>
   </section>
 
   <section class="stations" id="stations" aria-label="Channels"></section>
@@ -365,19 +364,20 @@
 
   <details class="drawer" id="favs">
     <summary>❤️ Favorites <span id="favCount"></span></summary>
-    <ul id="favList"></ul>
-    <p class="empty" id="favEmpty">Tap “Save” while a song plays to keep it here.</p>
     <div class="backup">
       <button class="pill" id="favBackup">⬇️ Back up</button>
       <button class="pill" id="favRestore">⬆️ Restore</button>
+      <button class="pill" id="favFolder" hidden>📁 Folder</button>
       <input type="file" id="favFile" accept=".md,text/markdown,text/plain" hidden>
     </div>
     <p class="empty" id="backupMsg"></p>
+    <ul id="favList"></ul>
+    <p class="empty" id="favEmpty">Tap “Save” while a song plays to keep it here.</p>
   </details>
 
 
   <div class="row">
-    <button class="ghost" id="disconnectBtn" disabled>Disconnect</button>
+    <button class="ghost" id="saverBtn" aria-pressed="false">📶 Data saver: off</button>
     <button class="ghost" id="premiumBtn">Add Phantom</button>
   </div>
 
@@ -416,7 +416,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.5.1';
+const VERSION = '2.6.0';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -487,7 +487,6 @@ const els = {
   castBtn: $('castBtn'), spineLink: $('spineLink'), castLabel: $('castLabel'), notice: $('notice'),
   artWrap: $('artWrap'), nowStation: $('nowStation'), nowTitle: $('nowTitle'),
   nowArtist: $('nowArtist'), nowState: $('nowState'), nowNext: $('nowNext'),
-  sleepBtn: $('sleepBtn'),
   playBtn: $('playBtn'), playIcon: $('playIcon'), muteBtn: $('muteBtn'), muteIcon: $('muteIcon'),
   vol: $('vol'), stations: $('stations'), disconnectBtn: $('disconnectBtn'),
 };
@@ -1077,7 +1076,7 @@ audio.addEventListener('error', () => {
 const saverBtn = $('saverBtn');
 function renderSaver() {
   const auto = !dataSaver && (autoLite || weakSignal());
-  saverBtn.innerHTML = '📶 Data saver<small>' + (dataSaver ? 'on' : auto ? 'auto' : 'off') + '</small>';
+  saverBtn.textContent = '📶 Data saver: ' + (dataSaver ? 'on' : auto ? 'auto' : 'off');
   saverBtn.classList.toggle('on', dataSaver || auto);
   saverBtn.setAttribute('aria-pressed', String(dataSaver));
 }
@@ -1120,60 +1119,11 @@ function updateMediaSession() {
   });
 }
 
-// ── Sleep timer ─────────────────────────────────
-// Each tap steps to the next length; the page has to stay open for the timer to fire.
-const SLEEP_STEPS = [0, 15, 30, 60, 90];
-let sleepStep = 0;
-let sleepAt = 0;   // time to stop, in ms; 0 = off
-const FADE_MS = 60000;   // the music fades out over the last minute
-let fade = null;         // volumes from before the fade, so they can be put back
-
-els.sleepBtn.addEventListener('click', () => {
-  endFade();
-  sleepStep = (sleepStep + 1) % SLEEP_STEPS.length;
-  sleepAt = SLEEP_STEPS[sleepStep] ? Date.now() + SLEEP_STEPS[sleepStep] * 60000 : 0;
-  checkSleep();
-});
-
 // Only touch the speaker if it's playing one of ours, not something else.
 function speakerIsOurs() {
   const r = remoteStation();
   return !!(r && r !== 'other' && castActive());
 }
-
-function fadeTo(frac) {
-  if (!fade) fade = { here: els.vol.value / 100, speaker: speakerIsOurs() ? player.volumeLevel : null };
-  audio.volume = fade.here * frac;
-  if (fade.speaker != null && castConnected()) {
-    player.volumeLevel = fade.speaker * frac;
-    ctrl.setVolumeLevel();
-  }
-}
-
-// Put the volume back where it was, so the next listen isn't quiet.
-function endFade() {
-  if (!fade) return;
-  fadeTo(1);
-  fade = null;
-}
-
-function checkSleep() {
-  const left = sleepAt - Date.now();
-  if (sleepAt && left <= 0) {
-    sleepAt = 0; sleepStep = 0;
-    stopHere();
-    if (speakerIsOurs()) ctrl.stop();
-    endFade();
-  } else if (sleepAt && left <= FADE_MS && (localStation || speakerIsOurs() || fade)) {
-    fadeTo(left / FADE_MS);
-  }
-  els.sleepBtn.innerHTML = '🌙 Sleep<small>' + (sleepAt
-    ? Math.ceil((sleepAt - Date.now()) / 60000) + ' min left'
-    : 'off') + '</small>';
-  els.sleepBtn.classList.toggle('on', !!sleepAt);
-}
-setInterval(checkSleep, 1000);   // every second, so the fade is smooth
-document.addEventListener('visibilitychange', checkSleep);
 
 // Coming back after a while: the phone may have frozen the page and left its speaker
 // connection stale. A quick reload reconnects (and rejoins a speaker that's still playing),
@@ -1253,14 +1203,44 @@ renderFavs();
 {
   const msg = t => { $('backupMsg').textContent = t; };
   const day = t => { const d = new Date(t); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };   // local date
-  $('favBackup').addEventListener('click', () => {
+  // Where the file goes: the Android app and browsers that can pick folders ask for a folder
+  // the first time and keep using it (📁 Folder picks another); anything else downloads it.
+  const canPick = !!(window.AndroidCast && window.AndroidCast.saveBackup) || 'showDirectoryPicker' in window;
+  $('favFolder').hidden = !canPick;
+  const db = (mode, fn) => new Promise((ok, fail) => {   // remembers the picked folder (localStorage can't hold it)
+    const o = indexedDB.open('hc_backup', 1);
+    o.onupgradeneeded = () => o.result.createObjectStore('kv');
+    o.onerror = () => fail(o.error);
+    o.onsuccess = () => {
+      try { const t = o.result.transaction('kv', mode), r = fn(t.objectStore('kv')); t.oncomplete = () => ok(r.result); t.onerror = () => fail(t.error); }
+      catch (e) { fail(e); }
+    };
+  });
+  async function saveInFolder(name, md, pickNew) {
+    let dir = pickNew ? null : await db('readonly', kv => kv.get('dir')).catch(() => null);
+    if (dir && await dir.requestPermission({ mode: 'readwrite' }) !== 'granted') dir = null;
+    if (!dir) {
+      dir = await window.showDirectoryPicker({ id: 'hc-backup', mode: 'readwrite', startIn: 'documents' });
+      await db('readwrite', kv => kv.put(dir, 'dir')).catch(() => {});
+    }
+    const w = await (await dir.getFileHandle(name, { create: true })).createWritable();   // same day = same file, replaced
+    await w.write(md); await w.close();
+    return dir.name;
+  }
+  window.onAndroidBackup = r => msg(r.ok ? 'Saved in ' + r.where + ' as ' + r.name : r.where === 'cancel' ? 'Backup cancelled.' : 'Couldn’t save the backup file.');
+  async function backUp(pickNew) {
     if (!favs.length) { msg('No favorites to back up yet.'); return; }
     const md = '# Halloween Caster · favorites\n\nBacked up ' + new Date().toLocaleString() + ' · ' + favs.length + (favs.length === 1 ? ' song' : ' songs')
       + '\n\n' + favs.map(f => '- **' + f.title + '** · ' + (f.artist || '') + ' · ' + (f.station || '') + ' · ' + day(f.at)).join('\n') + '\n';
     const name = 'halloween-caster-favorites-' + day(Date.now()) + '.md';
-    if (window.AndroidCast && window.AndroidCast.saveFile) {   // the Android app saves it to Downloads itself
+    if (window.AndroidCast && window.AndroidCast.saveBackup) { window.AndroidCast.saveBackup(name, md, !!pickNew); return; }   // answers through onAndroidBackup
+    if (window.AndroidCast && window.AndroidCast.saveFile) {   // an older Android app saves it to Downloads itself
       msg(window.AndroidCast.saveFile(name, md) ? 'Saved to Downloads as ' + name : 'Couldn’t save the backup file.');
       return;
+    }
+    if ('showDirectoryPicker' in window) {
+      try { msg('Saved in ' + await saveInFolder(name, md, pickNew) + ' as ' + name); return; }
+      catch (e) { if (e.name === 'AbortError') { msg('Backup cancelled.'); return; } diag('backup folder failed: ' + e.message); }
     }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([md], { type: 'text/markdown' }));
@@ -1268,7 +1248,9 @@ renderFavs();
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
     msg('Backup downloaded as ' + name);
-  });
+  }
+  $('favBackup').addEventListener('click', () => backUp(false));
+  $('favFolder').addEventListener('click', () => backUp(true));
   $('favRestore').addEventListener('click', () => $('favFile').click());
   $('favFile').addEventListener('change', async e => {
     const file = e.target.files && e.target.files[0];

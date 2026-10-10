@@ -18,7 +18,6 @@ A one-tap phone remote for [Halloween Radio](https://halloweenradio.net). Cast a
 - **Spine-Tingler.** One tap opens Halloween Radio's Spine-Tingler page on the channel you're listening to, so you can rate how spooky the song feels.
 - **Share a song.** Send what's playing to a friend, with a link to the app.
 - **Favorites.** Save a song (from Now playing or Recently played) and find it later on YouTube, YouTube Music or Spotify.
-- **Sleep timer.** Stop the music after 15, 30, 60 or 90 minutes. It fades out gently over the last minute, then puts the volume back for next time.
 - **Halloween countdown.** Days until October 31 at the top. Tap it and hand-drawn bats, jack-o'-lanterns, ghosts or a coven of witches on broomsticks fly across the screen, a different group each time. On Halloween itself, they come out on their own. 🧙‍♀️
 - **Opens instantly, even offline.** Add it to your home screen and it opens straight away, even with no signal. The music comes back as soon as you reconnect.
 - **Phantom channel** (formerly Premium) for Halloween Radio supporters: paste your own stream link once. The app tests it before saving, keeps it on your phone only, and adds a Phantom channel card that only appears once it's set up.
@@ -38,7 +37,6 @@ To use it like an app, open the page in Chrome and choose **Add to Home screen**
 
 - Works with screen readers and a keyboard, too.
 
-- The sleep timer runs in the page, so keep the app open, or at least not closed, until it goes off.
 - Favorites, your chosen channel, your settings (like Data saver and the time style) and the Phantom link are saved only in your browser. Nothing is sent anywhere else.
 - Found a problem, like a channel that won't play? [Open an issue](https://github.com/CC666Debug/halloween-caster/issues).
 
