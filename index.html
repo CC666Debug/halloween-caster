@@ -381,6 +381,7 @@
   <div class="row">
     <button class="ghost" id="saverBtn" aria-pressed="false">📶 Data saver: off</button>
     <button class="ghost" id="premiumBtn">Add Phantom</button>
+    <button class="ghost" id="newBtn">Add NEW</button>
   </div>
 
   <button class="share-app" id="shareBtn">📤 Share Halloween Caster<small>Send the app to a friend</small></button>
@@ -404,13 +405,13 @@
 
 <dialog id="premiumDlg">
   <form method="dialog" id="premiumForm" novalidate>
-    <h2>⭐ Phantom channel</h2>
+    <h2 id="premiumTitle">⭐ Phantom channel</h2>
     <div id="premiumAdd">
-      <p>For Halloween Radio supporters. Paste your Phantom stream link from halloweenradio.net (it used to be called Premium). It stays on this phone and is never shared.</p>
-      <label class="sr" for="premiumUrl">Phantom stream link</label>
+      <p>For Halloween Radio supporters. Paste your <span class="supName">Phantom</span> stream link from halloweenradio.net (log in, open the channel, copy its Stream URL). It stays on this phone and is never shared.</p>
+      <label class="sr" for="premiumUrl">Stream link</label>
       <input id="premiumUrl" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…">
     </div>
-    <p id="premiumHave" hidden>Phantom is set up on this phone. Removing it only deletes the link from this phone.</p>
+    <p id="premiumHave" hidden><span class="supName">Phantom</span> is set up on this phone. Removing it only deletes the link from this phone.</p>
     <p class="msg" id="premiumMsg" role="status"></p>
     <div class="row">
       <button class="ghost" value="cancel" formnovalidate>Cancel</button>
@@ -420,7 +421,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.9.0';
+const VERSION = '2.10.0';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -462,6 +463,7 @@ const STATIONS = [
 const SPINE = { main: 'hrm', oldies: 'hro', kids: 'hrk', movies: 'hrs', atmosphere: 'hra', instrumental: 'hri', cauldron: 'hrc' };
 const spineUrl = s => 'https://halloweenradio.net/spine-tingler' + (SPINE[s.id] ? '?station=' + SPINE[s.id] : '');
 const NOW_PLAYING = code => `https://radio1.streamserver.link/api/nowplaying_static/${code}.json`;
+const songFeed = s => s.feed || NOW_PLAYING(s.code);
 const POLL_MS = 15000;
 
 // Data saver plays the 64 kbps version on this device (half the data of 128 kbps MP3).
@@ -476,13 +478,18 @@ const streamFor = s => useLite() && s.lite ? { url: s.lite, type: 'audio/aac' } 
 // The other version of the same channel, used as a backup if one won't play.
 const backupFor = (s, url) => !s.lite ? null : url === s.lite ? { url: s.url, type: s.type } : { url: s.lite, type: 'audio/aac' };
 
-// Phantom (once called Premium) is for supporters. Its id and saved key keep the old name, so links saved before the rename still work.
-// its link is pasted once and kept only on this device, never in this public code.
-const PREMIUM_KEY = 'hc_premium_url';
-const premiumUrl = safeGet(PREMIUM_KEY);
-if (premiumUrl) {
-  STATIONS.push({ id: 'premium', name: 'Phantom ⭐', code: 'halloween_radio_premium', url: premiumUrl,
-                  type: /mp3/i.test(premiumUrl) ? 'audio/mpeg' : 'audio/aac' });
+// Supporter channels: each link is pasted once and kept only on this device, never in this public code.
+// Phantom (once called Premium) keeps the old id and saved key, so links saved before the rename still work.
+// NEW (the upgraded Main, on the station's new server) reads its song info from the server in its own link.
+const SUPPORTER = {
+  premium: { name: 'Phantom', key: 'hc_premium_url', code: () => 'halloween_radio_premium' },
+  new:     { name: 'NEW', key: 'hc_new_url', code: () => 'new',
+             feed: url => { const m = url.match(/^(https:\/\/[^/]+)\/listen\/([^/]+)/); return m ? `${m[1]}/api/nowplaying_static/${m[2]}.json` : ''; } },
+};
+for (const [id, c] of Object.entries(SUPPORTER)) {
+  c.url = safeGet(c.key);
+  if (c.url) STATIONS.push({ id, name: c.name + ' ⭐', code: c.code(), url: c.url, feed: c.feed ? c.feed(c.url) : undefined,
+                             type: /mp3/i.test(c.url) ? 'audio/mpeg' : 'audio/aac' });
 }
 
 const $ = id => document.getElementById(id);
@@ -619,7 +626,7 @@ function loadStation(s, stream = { url: s.url, type: s.type }, isBackup = false)
   speakerLoading = s;
   const t = performance.now();
   loadStartedAt = t;
-  diag('sending ' + s.name + ' to ' + session.getCastDevice().friendlyName + ' · ' + stream.url);
+  diag('sending ' + s.name + ' to ' + session.getCastDevice().friendlyName + ' · ' + (SUPPORTER[s.id] ? '(private supporter link)' : stream.url));
   kickStart();   // watch for a stall from the moment it's sent (the speaker can start before it says it accepted)
   session.loadMedia(req).then(() => { diag('speaker accepted ' + s.name + ' after ' + ((performance.now() - t) / 1000).toFixed(2) + 's'); kickStart(); }).catch(err => {
     diag('speaker REFUSED ' + s.name + ' after ' + ((performance.now() - t) / 1000).toFixed(2) + 's · ' + err);
@@ -915,24 +922,29 @@ els.vol.addEventListener('input', () => {
   });
 }
 
-const premiumBtn = $('premiumBtn');
 const premiumDlg = $('premiumDlg');
 const premiumMsg = $('premiumMsg');
 const premiumGo = $('premiumGo');
-premiumBtn.textContent = premiumUrl ? '⭐ Phantom: on' : 'Add Phantom';
-premiumBtn.classList.toggle('on', !!premiumUrl);
-
+let sup = null;           // the supporter channel the dialog is open for
 let premiumFailed = '';   // a link that failed the test; tapping again saves it anyway
 
-premiumBtn.addEventListener('click', () => {
-  $('premiumAdd').hidden = !!premiumUrl;
-  $('premiumHave').hidden = !premiumUrl;
-  premiumGo.textContent = premiumUrl ? 'Remove Phantom' : 'Test & save';
-  $('premiumUrl').value = '';
-  premiumMsg.textContent = ''; premiumMsg.className = 'msg';
-  premiumFailed = '';
-  premiumDlg.showModal();
-});
+for (const [id, btnId] of [['premium', 'premiumBtn'], ['new', 'newBtn']]) {
+  const c = SUPPORTER[id], btn = $(btnId);
+  btn.textContent = c.url ? `⭐ ${c.name}: on` : `Add ${c.name}`;
+  btn.classList.toggle('on', !!c.url);
+  btn.addEventListener('click', () => {
+    sup = Object.assign({ id }, c);
+    $('premiumTitle').textContent = `⭐ ${c.name} channel`;
+    document.querySelectorAll('.supName').forEach(el => el.textContent = c.name);
+    $('premiumAdd').hidden = !!c.url;
+    $('premiumHave').hidden = !c.url;
+    premiumGo.textContent = c.url ? `Remove ${c.name}` : 'Test & save';
+    $('premiumUrl').value = '';
+    premiumMsg.textContent = ''; premiumMsg.className = 'msg';
+    premiumFailed = '';
+    premiumDlg.showModal();
+  });
+}
 
 // Tries the link for up to 10 seconds; resolves true once audio starts arriving.
 function testStream(url) {
@@ -949,17 +961,17 @@ function testStream(url) {
 }
 
 function savePremium(url) {
-  safeSet(PREMIUM_KEY, url);
-  safeSet('hc_station', 'premium');
+  safeSet(sup.key, url);
+  safeSet('hc_station', sup.id);
   location.reload();
 }
 
 $('premiumForm').addEventListener('submit', async e => {
   if (e.submitter && e.submitter.value === 'cancel') return;   // let the dialog close
   e.preventDefault();
-  if (premiumUrl) {
-    try { localStorage.removeItem(PREMIUM_KEY); } catch (err) {}
-    if (selected.id === 'premium') safeSet('hc_station', 'main');
+  if (sup.url) {
+    try { localStorage.removeItem(sup.key); } catch (err) {}
+    if (selected.id === sup.id) safeSet('hc_station', 'main');
     location.reload();
     return;
   }
@@ -1323,7 +1335,7 @@ async function pollStations(list) {
   lastPoll = Date.now();
   await Promise.all(list.map(async s => {
     try {
-      const r = await fetch(NOW_PLAYING(s.code), { cache: 'no-store' });
+      const r = await fetch(songFeed(s), { cache: 'no-store' });
       if (!r.ok) return;
       const d = await r.json();
       const song = (d.now_playing && d.now_playing.song) || {};
