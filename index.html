@@ -421,7 +421,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.11.0';
+const VERSION = '2.11.1';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -457,7 +457,9 @@ const STATIONS = [
   { id: 'atmosphere',   name: 'Atmosphere',   code: 'halloween_radio_atmosphere',   url: 'https://radio1.streamserver.link/radio/8040/hra-mp3', type: 'audio/mpeg',
     lite: 'https://radio1.streamserver.link/radio/8040/hra-aac' },
   { id: 'instrumental', name: 'Instrumental', code: 'halloween_radio_instrumental', url: 'https://radio1.streamserver.link/radio/8100/hri-aac', type: 'audio/aac' },
-  { id: 'cauldron',     name: 'Cauldron',     code: 'halloween_radio_cauldron',     url: 'https://radio1.streamserver.link/radio/8140/hrc-aac', type: 'audio/aac' },
+  // Cauldron moved to Halloween Radio's new server (Oct 2026); its old address still plays but its song info lost the song length
+  { id: 'cauldron',     name: 'Cauldron',     code: 'halloween_radio_cauldron',     url: 'https://stream.halloweenradio.net/listen/halloween_radio_cauldron/aac', type: 'audio/aac',
+    feed: 'https://stream.halloweenradio.net/api/nowplaying_static/halloween_radio_cauldron.json' },
 ];
 // Spine-Tingler (rate how spooky the song feels) opens on the same channel. Phantom has no tab there.
 const SPINE = { main: 'hrm', oldies: 'hro', kids: 'hrk', movies: 'hrs', atmosphere: 'hra', instrumental: 'hri', cauldron: 'hrc' };
