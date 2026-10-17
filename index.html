@@ -448,15 +448,15 @@ addEventListener('offline', () => diag('network OFFLINE'));
 const STATIONS = [
   // Halloween Radio is moving channels to its new server (Oct 2026, better quality). Moved ones play from there with its song info;
   // the old server's AAC stays as Data saver and as the backup if the new stream fails. Main, Atmosphere and Instrumental aren't streaming there yet.
+  // Kids and Soundtracks are back on the old server for now: on the new one they got stuck on AzuraCast's placeholder message (Oct 17).
   { id: 'main',         name: 'Main',         code: 'halloween_radio_main',         url: 'https://radio1.streamserver.link/radio/8000/hrm-mp3', type: 'audio/mpeg',
     lite: 'https://radio1.streamserver.link/radio/8000/hrm-aac' },
   { id: 'oldies',       name: 'Oldies',       code: 'halloween_radio_oldies', url: 'https://stream.halloweenradio.net/listen/halloween_radio_oldies/aac', type: 'audio/aac',
     feed: 'https://stream.halloweenradio.net/api/nowplaying_static/halloween_radio_oldies.json', lite: 'https://radio1.streamserver.link/radio/8020/hro-aac' },
-  // Kids is back on the old server for now: its new-server stream got stuck on AzuraCast's placeholder message (Oct 17).
   { id: 'kids',         name: 'Kids',         code: 'halloween_radio_kids',         url: 'https://radio1.streamserver.link/radio/8030/hrk-mp3', type: 'audio/mpeg',
     lite: 'https://radio1.streamserver.link/radio/8030/hrk-aac' },
-  { id: 'movies',       name: 'Soundtracks',  code: 'halloween_radio_soundtracks', url: 'https://stream.halloweenradio.net/listen/halloween_radio_soundtracks/aac', type: 'audio/aac',
-    feed: 'https://stream.halloweenradio.net/api/nowplaying_static/halloween_radio_soundtracks.json', lite: 'https://radio1.streamserver.link/radio/8050/hrs-aac' },
+  { id: 'movies',       name: 'Soundtracks',  code: 'halloween_radio_soundtracks', url: 'https://radio1.streamserver.link/radio/8050/hrs-mp3', type: 'audio/mpeg',
+    lite: 'https://radio1.streamserver.link/radio/8050/hrs-aac' },
   { id: 'atmosphere',   name: 'Atmosphere',   code: 'halloween_radio_atmosphere',   url: 'https://radio1.streamserver.link/radio/8040/hra-mp3', type: 'audio/mpeg',
     lite: 'https://radio1.streamserver.link/radio/8040/hra-aac' },
   { id: 'instrumental', name: 'Instrumental', code: 'halloween_radio_instrumental', url: 'https://radio1.streamserver.link/radio/8100/hri-aac', type: 'audio/aac' },
