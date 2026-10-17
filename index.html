@@ -421,7 +421,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.12.0';
+const VERSION = '2.12.1';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -446,21 +446,20 @@ addEventListener('pageshow', e => { if (e.persisted) diag('page restored from me
 addEventListener('online', () => diag('network online'));
 addEventListener('offline', () => diag('network OFFLINE'));
 const STATIONS = [
-  // Halloween Radio is moving channels to its new server (Oct 2026, better quality). Moved ones play from there with its song info;
-  // the old server's AAC stays as Data saver and as the backup if the new stream fails. Main, Atmosphere and Instrumental aren't streaming there yet.
+  // All channels play from radio1.streamserver.link, the addresses on Halloween Radio's own station page.
+  // stream.halloweenradio.net is only their test server (it carries the NEW test channel) and is not used here.
   { id: 'main',         name: 'Main',         code: 'halloween_radio_main',         url: 'https://radio1.streamserver.link/radio/8000/hrm-mp3', type: 'audio/mpeg',
     lite: 'https://radio1.streamserver.link/radio/8000/hrm-aac' },
-  { id: 'oldies',       name: 'Oldies',       code: 'halloween_radio_oldies', url: 'https://stream.halloweenradio.net/listen/halloween_radio_oldies/aac', type: 'audio/aac',
-    feed: 'https://stream.halloweenradio.net/api/nowplaying_static/halloween_radio_oldies.json', lite: 'https://radio1.streamserver.link/radio/8020/hro-aac' },
-  { id: 'kids',         name: 'Kids',         code: 'halloween_radio_kids', url: 'https://stream.halloweenradio.net/listen/halloween_radio_kids/aac', type: 'audio/aac',
-    feed: 'https://stream.halloweenradio.net/api/nowplaying_static/halloween_radio_kids.json', lite: 'https://radio1.streamserver.link/radio/8030/hrk-aac' },
-  { id: 'movies',       name: 'Soundtracks',  code: 'halloween_radio_soundtracks', url: 'https://stream.halloweenradio.net/listen/halloween_radio_soundtracks/aac', type: 'audio/aac',
-    feed: 'https://stream.halloweenradio.net/api/nowplaying_static/halloween_radio_soundtracks.json', lite: 'https://radio1.streamserver.link/radio/8050/hrs-aac' },
+  { id: 'oldies',       name: 'Oldies',       code: 'halloween_radio_oldies',       url: 'https://radio1.streamserver.link/radio/8020/hro-mp3', type: 'audio/mpeg',
+    lite: 'https://radio1.streamserver.link/radio/8020/hro-aac' },
+  { id: 'kids',         name: 'Kids',         code: 'halloween_radio_kids',         url: 'https://radio1.streamserver.link/radio/8030/hrk-mp3', type: 'audio/mpeg',
+    lite: 'https://radio1.streamserver.link/radio/8030/hrk-aac' },
+  { id: 'movies',       name: 'Soundtracks',  code: 'halloween_radio_soundtracks', url: 'https://radio1.streamserver.link/radio/8050/hrs-mp3', type: 'audio/mpeg',
+    lite: 'https://radio1.streamserver.link/radio/8050/hrs-aac' },
   { id: 'atmosphere',   name: 'Atmosphere',   code: 'halloween_radio_atmosphere',   url: 'https://radio1.streamserver.link/radio/8040/hra-mp3', type: 'audio/mpeg',
     lite: 'https://radio1.streamserver.link/radio/8040/hra-aac' },
   { id: 'instrumental', name: 'Instrumental', code: 'halloween_radio_instrumental', url: 'https://radio1.streamserver.link/radio/8100/hri-aac', type: 'audio/aac' },
-  { id: 'cauldron',     name: 'Cauldron',     code: 'halloween_radio_cauldron',     url: 'https://stream.halloweenradio.net/listen/halloween_radio_cauldron/aac', type: 'audio/aac',
-    feed: 'https://stream.halloweenradio.net/api/nowplaying_static/halloween_radio_cauldron.json' },
+  { id: 'cauldron',     name: 'Cauldron',     code: 'halloween_radio_cauldron',     url: 'https://radio1.streamserver.link/radio/8140/hrc-aac', type: 'audio/aac' },
 ];
 // Spine-Tingler (rate how spooky the song feels) opens on the same channel. Phantom has no tab there.
 const SPINE = { main: 'hrm', oldies: 'hro', kids: 'hrk', movies: 'hrs', atmosphere: 'hra', instrumental: 'hri', cauldron: 'hrc' };
