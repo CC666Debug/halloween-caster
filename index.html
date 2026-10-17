@@ -421,7 +421,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.12.1';
+const VERSION = '2.13.0';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -468,8 +468,8 @@ const NOW_PLAYING = code => `https://radio1.streamserver.link/api/nowplaying_sta
 const songFeed = s => s.feed || NOW_PLAYING(s.code);
 const POLL_MS = 15000;
 
-// Data saver plays the 64 kbps version on this device (half the data of 128 kbps MP3).
-// Speakers always get full quality, since they're on Wi-Fi.
+// Data saver plays the 64 kbps version (half the data of 128 kbps MP3), on this phone and on a speaker.
+// A speaker follows only the switch you set by hand: the phone's weak-signal auto mode never lowers a speaker's quality.
 let dataSaver = safeGet('hc_saver') === '1';
 // It also switches on by itself when the phone reports a weak connection, or after repeated drops.
 const net = navigator.connection;
@@ -477,6 +477,7 @@ const weakSignal = () => !!net && (net.saveData || /2g|3g/.test(net.effectiveTyp
 let autoLite = false;   // light stream picked automatically after repeated drops
 const useLite = () => dataSaver || autoLite || weakSignal();
 const streamFor = s => useLite() && s.lite ? { url: s.lite, type: 'audio/aac' } : { url: s.url, type: s.type };
+const speakerStreamFor = s => dataSaver && s.lite ? { url: s.lite, type: 'audio/aac' } : { url: s.url, type: s.type };
 // The other version of the same channel, used as a backup if one won't play.
 const backupFor = (s, url) => !s.lite ? null : url === s.lite ? { url: s.url, type: s.type } : { url: s.lite, type: 'audio/aac' };
 
@@ -609,7 +610,7 @@ window.__onGCastApiAvailable = function (available) {
   render();
 };
 
-function loadStation(s, stream = { url: s.url, type: s.type }, isBackup = false) {
+function loadStation(s, stream = speakerStreamFor(s), isBackup = false) {
   const session = ctx.getCurrentSession();
   if (!session) return;
   const info = new chrome.cast.media.MediaInfo(stream.url, stream.type);
@@ -1099,6 +1100,10 @@ saverBtn.addEventListener('click', () => {
   safeSet('hc_saver', dataSaver ? '1' : '0');
   renderSaver();
   if (localStation) playHere(localStation);   // switch the stream now
+  else if (castActive()) {                     // and on the speaker, if it's playing a channel with two versions
+    const s = remoteStation();
+    if (s && s !== 'other' && s.lite) loadStation(s);
+  }
 });
 renderSaver();
 
