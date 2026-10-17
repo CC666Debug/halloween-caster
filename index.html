@@ -421,7 +421,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.12.0';
+const VERSION = '2.12.1';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -452,8 +452,9 @@ const STATIONS = [
     lite: 'https://radio1.streamserver.link/radio/8000/hrm-aac' },
   { id: 'oldies',       name: 'Oldies',       code: 'halloween_radio_oldies', url: 'https://stream.halloweenradio.net/listen/halloween_radio_oldies/aac', type: 'audio/aac',
     feed: 'https://stream.halloweenradio.net/api/nowplaying_static/halloween_radio_oldies.json', lite: 'https://radio1.streamserver.link/radio/8020/hro-aac' },
-  { id: 'kids',         name: 'Kids',         code: 'halloween_radio_kids', url: 'https://stream.halloweenradio.net/listen/halloween_radio_kids/aac', type: 'audio/aac',
-    feed: 'https://stream.halloweenradio.net/api/nowplaying_static/halloween_radio_kids.json', lite: 'https://radio1.streamserver.link/radio/8030/hrk-aac' },
+  // Kids is back on the old server for now: its new-server stream got stuck on AzuraCast's placeholder message (Oct 17).
+  { id: 'kids',         name: 'Kids',         code: 'halloween_radio_kids',         url: 'https://radio1.streamserver.link/radio/8030/hrk-mp3', type: 'audio/mpeg',
+    lite: 'https://radio1.streamserver.link/radio/8030/hrk-aac' },
   { id: 'movies',       name: 'Soundtracks',  code: 'halloween_radio_soundtracks', url: 'https://stream.halloweenradio.net/listen/halloween_radio_soundtracks/aac', type: 'audio/aac',
     feed: 'https://stream.halloweenradio.net/api/nowplaying_static/halloween_radio_soundtracks.json', lite: 'https://radio1.streamserver.link/radio/8050/hrs-aac' },
   { id: 'atmosphere',   name: 'Atmosphere',   code: 'halloween_radio_atmosphere',   url: 'https://radio1.streamserver.link/radio/8040/hra-mp3', type: 'audio/mpeg',
