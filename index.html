@@ -282,6 +282,18 @@
   dialog .row { margin-top: 14px; }
   dialog .primary { flex: 1; border-radius: 12px; padding: 10px; background: var(--accent); color: var(--accent-ink); font-weight: 650; }
   dialog [hidden] { display: none; }
+  #streamList .opt {
+    width: 100%; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; align-items: center; text-align: left;
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-top: 8px;
+  }
+  #streamList .opt.on { border-color: var(--accent); }
+  #streamList .rad { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--muted); }
+  #streamList .opt.on .rad { border-color: var(--accent); background: radial-gradient(var(--accent) 40%, transparent 46%); }
+  #streamList .opt small { display: block; color: var(--muted); font-size: 12px; }
+  #streamList .grp { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-top: 14px; }
+  #streamList .b { font-size: 11px; border-radius: 6px; padding: 2px 7px; white-space: nowrap; }
+  #streamList .b.best { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  #streamList .b.sv { border: 1px solid var(--line); color: var(--muted); }
   button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible {
     outline: 2px solid var(--accent); outline-offset: 2px;
   }
@@ -379,7 +391,7 @@
 
 
   <div class="row">
-    <button class="ghost" id="saverBtn" aria-pressed="false">📶 Data saver: off</button>
+    <button class="ghost" id="saverBtn" aria-haspopup="dialog">📶 Stream: Best</button>
     <button class="ghost" id="premiumBtn">Add Phantom</button>
     <button class="ghost" id="newBtn">Add NEW</button>
   </div>
@@ -403,6 +415,18 @@
   </form>
 </dialog>
 
+<dialog id="streamDlg">
+  <form method="dialog">
+    <h2 id="streamTitle">📶 Streams</h2>
+    <p>The best one plays unless you pick another. If a stream won’t play, the app tries the next one down.</p>
+    <div id="streamList"></div>
+    <div class="row">
+      <button class="ghost" id="streamBest" value="best">↺ Back to best</button>
+      <button class="primary" value="done">Done</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="premiumDlg">
   <form method="dialog" id="premiumForm" novalidate>
     <h2 id="premiumTitle">⭐ Phantom channel</h2>
@@ -421,7 +445,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.13.4';
+const VERSION = '2.14.0';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -446,43 +470,64 @@ addEventListener('pageshow', e => { if (e.persisted) diag('page restored from me
 addEventListener('online', () => diag('network online'));
 addEventListener('offline', () => diag('network OFFLINE'));
 const STATIONS = [
-  // All channels play from radio1.streamserver.link, the addresses on Halloween Radio's own station page.
-  // stream.halloweenradio.net is only their test server (it carries the NEW test channel) and is not used here.
-  { id: 'main',         name: 'Main',         code: 'halloween_radio_main',         url: 'https://radio1.streamserver.link/radio/8000/hrm-mp3', type: 'audio/mpeg',
-    lite: 'https://radio1.streamserver.link/radio/8000/hrm-aac' },
-  { id: 'oldies',       name: 'Oldies',       code: 'halloween_radio_oldies',       url: 'https://radio1.streamserver.link/radio/8020/hro-mp3', type: 'audio/mpeg',
-    lite: 'https://radio1.streamserver.link/radio/8020/hro-aac' },
-  { id: 'kids',         name: 'Kids',         code: 'halloween_radio_kids',         url: 'https://radio1.streamserver.link/radio/8030/hrk-mp3', type: 'audio/mpeg',
-    lite: 'https://radio1.streamserver.link/radio/8030/hrk-aac' },
-  { id: 'movies',       name: 'Soundtracks',  code: 'halloween_radio_soundtracks', url: 'https://radio1.streamserver.link/radio/8050/hrs-mp3', type: 'audio/mpeg',
-    lite: 'https://radio1.streamserver.link/radio/8050/hrs-aac' },
-  { id: 'atmosphere',   name: 'Atmosphere',   code: 'halloween_radio_atmosphere',   url: 'https://radio1.streamserver.link/radio/8040/hra-mp3', type: 'audio/mpeg',
-    lite: 'https://radio1.streamserver.link/radio/8040/hra-aac' },
-  { id: 'instrumental', name: 'Instrumental', code: 'halloween_radio_instrumental', url: 'https://radio1.streamserver.link/radio/8100/hri-aac', type: 'audio/aac' },
-  // Cauldron is the one channel Halloween Radio marked as moved to its new server (96 kbps, the songs their own player plays).
-  // Its old address (still the one on their stations page) stays as Data saver and as the backup if the new stream fails.
-  { id: 'cauldron',     name: 'Cauldron',     code: 'halloween_radio_cauldron', url: 'https://stream.halloweenradio.net/listen/halloween_radio_cauldron/aac', type: 'audio/aac',
-    feed: 'https://stream.halloweenradio.net/api/nowplaying_static/halloween_radio_cauldron.json', lite: 'https://radio1.streamserver.link/radio/8140/hrc-aac' },
+  // Every link for each channel, best first. The app plays the first one unless you pick another (Stream button),
+  // and if a stream won't play it moves down the list. New server (stream.halloweenradio.net) is what their website
+  // plays now; the old server (radio1.streamserver.link) stays as the backup while it's still running.
+  { id: 'main',         name: 'Main',         code: 'halloween_radio_main', streams: [
+    'https://stream.halloweenradio.net/listen/halloween_radio_main/aac', 'https://radio1.streamserver.link/radio/8000/hrm-mp3', 'https://radio1.streamserver.link/radio/8000/hrm-aac'] },
+  { id: 'oldies',       name: 'Oldies',       code: 'halloween_radio_oldies', streams: [
+    'https://stream.halloweenradio.net/listen/halloween_radio_oldies/aac', 'https://radio1.streamserver.link/radio/8020/hro-mp3', 'https://radio1.streamserver.link/radio/8020/hro-aac'] },
+  { id: 'kids',         name: 'Kids',         code: 'halloween_radio_kids', streams: [
+    'https://stream.halloweenradio.net/listen/halloween_radio_kids/aac', 'https://radio1.streamserver.link/radio/8030/hrk-mp3', 'https://radio1.streamserver.link/radio/8030/hrk-aac'] },
+  { id: 'movies',       name: 'Soundtracks',  code: 'halloween_radio_soundtracks', streams: [
+    'https://stream.halloweenradio.net/listen/halloween_radio_soundtracks/aac', 'https://radio1.streamserver.link/radio/8050/hrs-mp3', 'https://radio1.streamserver.link/radio/8050/hrs-aac'] },
+  { id: 'atmosphere',   name: 'Atmosphere',   code: 'halloween_radio_atmosphere', streams: [
+    'https://stream.halloweenradio.net/listen/halloween_radio_atmosphere/mp3', 'https://stream.halloweenradio.net/listen/halloween_radio_atmosphere/aac', 'https://radio1.streamserver.link/radio/8040/hra-mp3', 'https://radio1.streamserver.link/radio/8040/hra-aac'] },
+  { id: 'instrumental', name: 'Instrumental', code: 'halloween_radio_instrumental', streams: [
+    'https://radio1.streamserver.link/radio/8100/hri-aac'] },
+  { id: 'cauldron',     name: 'Cauldron',     code: 'halloween_radio_cauldron', streams: [
+    'https://stream.halloweenradio.net/listen/halloween_radio_cauldron/aac', 'https://radio1.streamserver.link/radio/8140/hrc-aac'] },
 ];
+// Kilobits per second of each stream (from the servers' own station lists), for the Stream list.
+const KBPS = { 'https://stream.halloweenradio.net/listen/halloween_radio_atmosphere/aac': 64, 'https://stream.halloweenradio.net/listen/halloween_radio_atmosphere/mp3': 128 };
+const kbps = url => KBPS[url] || (/stream\.halloweenradio\.net.*\/aac$/.test(url) ? 96 : /mp3/i.test(url) ? 128 : 64);
+const isNewServer = url => /^https:\/\/stream\.halloweenradio\.net\//.test(url);
+const mkStream = url => ({ url, type: /mp3/i.test(url) ? 'audio/mpeg' : 'audio/aac', kbps: kbps(url),
+  server: isNewServer(url) ? 'New' : 'Old', label: (isNewServer(url) ? 'New' : 'Old') + ' · ' + (/mp3/i.test(url) ? 'MP3' : 'AAC') + ' ' + kbps(url) });
+STATIONS.forEach(s => { s.streams = s.streams.map(mkStream); s.url = s.streams[0].url; });
 // Spine-Tingler (rate how spooky the song feels) opens on the same channel. Phantom has no tab there.
 const SPINE = { main: 'hrm', oldies: 'hro', kids: 'hrk', movies: 'hrs', atmosphere: 'hra', instrumental: 'hri', cauldron: 'hrc' };
 const spineUrl = s => 'https://halloweenradio.net/spine-tingler' + (SPINE[s.id] ? '?station=' + SPINE[s.id] : '');
-const NOW_PLAYING = code => `https://radio1.streamserver.link/api/nowplaying_static/${code}.json`;
-const songFeed = s => s.feed || NOW_PLAYING(s.code);
+// Song info comes from the server the channel is playing from (the old server can run a different playlist).
+const NOW_PLAYING = (code, url) => `https://${isNewServer(url) ? 'stream.halloweenradio.net' : 'radio1.streamserver.link'}/api/nowplaying_static/${code}.json`;
+const songFeed = s => s.feed || NOW_PLAYING(s.code, playingUrl(s));
 const POLL_MS = 15000;
 
-// Data saver plays the 64 kbps version (half the data of 128 kbps MP3), on this phone and on a speaker.
-// A speaker follows only the switch you set by hand: the phone's weak-signal auto mode never lowers a speaker's quality.
-let dataSaver = safeGet('hc_saver') === '1';
-// It also switches on by itself when the phone reports a weak connection, or after repeated drops.
+// The Stream button picks one link per channel (kept on this phone). Without a pick the best one plays.
+// Data saver is the smallest link in the list. The phone also drops to it by itself on a weak connection or
+// after repeated drops; a speaker only plays what you picked.
+const pickKey = s => 'hc_stream_' + s.id;
+function pickedIndex(s) {
+  const u = safeGet(pickKey(s));
+  const i = u ? s.streams.findIndex(x => x.url === u) : -1;
+  return i >= 0 ? i : null;
+}
+const saverIndex = s => s.streams.reduce((m, x, i) => x.kbps < s.streams[m].kbps || (x.kbps === s.streams[m].kbps && x.server === 'Old') ? i : m, 0);
 const net = navigator.connection;
 const weakSignal = () => !!net && (net.saveData || /2g|3g/.test(net.effectiveType || ''));
 let autoLite = false;   // light stream picked automatically after repeated drops
-const useLite = () => dataSaver || autoLite || weakSignal();
-const streamFor = s => useLite() && s.lite ? { url: s.lite, type: 'audio/aac' } : { url: s.url, type: s.type };
-const speakerStreamFor = s => dataSaver && s.lite ? { url: s.lite, type: 'audio/aac' } : { url: s.url, type: s.type };
-// The other version of the same channel, used as a backup if one won't play.
-const backupFor = (s, url) => !s.lite ? null : url === s.lite ? { url: s.url, type: s.type } : { url: s.lite, type: 'audio/aac' };
+const autoSaver = s => pickedIndex(s) === null && s.streams.length > 1 && (autoLite || weakSignal());
+const streamFor = s => s.streams[autoSaver(s) ? saverIndex(s) : pickedIndex(s) ?? 0];
+const speakerStreamFor = s => s.streams[pickedIndex(s) ?? 0];
+// The next link down the list, used as a backup if one won't play (never goes back up by itself).
+const backupFor = (s, url) => { const i = s.streams.findIndex(x => x.url === url); return i >= 0 && s.streams[i + 1] || null; };
+// The link a channel is playing right now (on this phone or the speaker), or would play next.
+function playingUrl(s) {
+  if (localStation === s && audio.src && s.streams.some(x => x.url === audio.src)) return audio.src;
+  const id = player && player.mediaInfo && player.mediaInfo.contentId;
+  if (id && s.streams.some(x => x.url === id)) return id;
+  return (ctx && castConnected() ? speakerStreamFor(s) : streamFor(s)).url;
+}
 
 // Supporter channels: each link is pasted once and kept only on this device, never in this public code.
 // Phantom (once called Premium) keeps the old id and saved key, so links saved before the rename still work.
@@ -495,7 +540,7 @@ const SUPPORTER = {
 for (const [id, c] of Object.entries(SUPPORTER)) {
   c.url = safeGet(c.key);
   if (c.url) STATIONS.push({ id, name: c.name + ' ⭐', code: c.code(), url: c.url, feed: c.feed ? c.feed(c.url) : undefined,
-                             type: /mp3/i.test(c.url) ? 'audio/mpeg' : 'audio/aac' });
+                             streams: [{ url: c.url, type: /mp3/i.test(c.url) ? 'audio/mpeg' : 'audio/aac', label: 'your supporter link' }] });
 }
 
 const $ = id => document.getElementById(id);
@@ -613,7 +658,7 @@ window.__onGCastApiAvailable = function (available) {
   render();
 };
 
-function loadStation(s, stream = speakerStreamFor(s), isBackup = false) {
+function loadStation(s, stream = speakerStreamFor(s)) {
   const session = ctx.getCurrentSession();
   if (!session) return;
   const info = new chrome.cast.media.MediaInfo(stream.url, stream.type);
@@ -636,8 +681,8 @@ function loadStation(s, stream = speakerStreamFor(s), isBackup = false) {
   kickStart();   // watch for a stall from the moment it's sent (the speaker can start before it says it accepted)
   session.loadMedia(req).then(() => { diag('speaker accepted ' + s.name + ' after ' + ((performance.now() - t) / 1000).toFixed(2) + 's'); kickStart(); }).catch(err => {
     diag('speaker REFUSED ' + s.name + ' after ' + ((performance.now() - t) / 1000).toFixed(2) + 's · ' + err);
-    const backup = !isBackup && backupFor(s, stream.url);
-    if (backup) { loadStation(s, backup, true); return; }
+    const backup = backupFor(s, stream.url);
+    if (backup) { loadStation(s, backup); return; }
     speakerLoading = null;
     showNotice('The speaker couldn’t start ' + s.name + ' (' + err + ').');
     render();
@@ -717,7 +762,7 @@ function onSpeakerState() {
 // Which of our stations is the speaker actually playing right now?
 function remoteStation() {
   const id = player && player.mediaInfo && player.mediaInfo.contentId;
-  return id ? STATIONS.find(s => s.url === id || s.lite === id) || 'other' : null;
+  return id ? STATIONS.find(s => s.streams.some(x => x.url === id)) || 'other' : null;
 }
 
 els.castBtn.addEventListener('click', () => {
@@ -1000,7 +1045,7 @@ const audio = new Audio();
 audio.preload = 'none';
 let localStation = null;   // station playing through this phone, if any
 let hereLive = false;      // true once audio is actually coming out
-let triedBackup = false;   // already switched to the other version once for this play
+let hereUrl = null;        // the link this phone is playing (may be a backup further down the list)
 let reconnecting = false;  // false, true, or 'offline' (waiting for the signal to come back)
 let retry = 0, retryTimer = null, stallTimer = null;
 const RETRY_DELAYS = [1, 2, 4, 8, 15, 30];   // seconds between tries; then every 30 seconds
@@ -1024,7 +1069,8 @@ function reconnectHere() {
   retryTimer = setTimeout(() => {
     retryTimer = null;
     if (!localStation) return;
-    audio.src = streamFor(localStation).url;
+    if (autoSaver(localStation) || !hereUrl) hereUrl = streamFor(localStation).url;
+    audio.src = hereUrl;
     audio.play().catch(() => {});
     stallTimer = setTimeout(reconnectHere, 10000);   // still nothing after 10 seconds: try again
     renderSaver();
@@ -1036,9 +1082,8 @@ function playHere(s) {
   selected = s;
   localStation = s;
   hereLive = false;
-  triedBackup = false;
   clearRetry(); retry = 0; reconnecting = false;
-  audio.src = streamFor(s).url;
+  audio.src = hereUrl = streamFor(s).url;
   audio.volume = els.vol.value / 100;
   hideNotice();
   audio.play().catch(err => {
@@ -1081,40 +1126,83 @@ audio.addEventListener('stalled', stalled);
 audio.addEventListener('error', () => {
   if (!localStation || retryTimer) return;   // nothing playing, or already waiting to reconnect
   const s = localStation;
-  const backup = !triedBackup && backupFor(s, audio.src);
+  const backup = backupFor(s, hereUrl);
   if (backup) {
-    triedBackup = true;
-    audio.src = backup.url;
+    diag(s.name + ': ' + streamLabel(s, hereUrl) + ' won’t play, trying ' + backup.label);
+    audio.src = hereUrl = backup.url;
+    renderSaver();
     audio.play().catch(() => {});
     return;
   }
   reconnectHere();
 });
 
+// ── Stream button ───────────────────────────────
+// Shows which link the current channel plays; tapping it lists every link for that channel.
 const saverBtn = $('saverBtn');
+const streamLabel = (s, url) => (s.streams.find(x => x.url === url) || {}).label || '';
+const streamStation = () => { const r = castActive() && remoteStation(); return r && r !== 'other' ? r : localStation || selected; };
 function renderSaver() {
-  const auto = !dataSaver && (autoLite || weakSignal());
-  saverBtn.textContent = '📶 Data saver: ' + (dataSaver ? 'on' : auto ? 'auto' : 'off');
-  saverBtn.classList.toggle('on', dataSaver || auto);
-  saverBtn.setAttribute('aria-pressed', String(dataSaver));
+  const s = streamStation();
+  if (!s) return;
+  const url = playingUrl(s), i = s.streams.findIndex(x => x.url === url);
+  const picked = pickedIndex(s) !== null;
+  saverBtn.textContent = '📶 Stream: ' + (i <= 0 && !picked ? 'Best' : streamLabel(s, url) + (autoSaver(s) && i === saverIndex(s) ? ' (auto)' : ''));
+  saverBtn.classList.toggle('on', i > 0 || picked);
 }
-saverBtn.addEventListener('click', () => {
-  dataSaver = !dataSaver;
-  safeSet('hc_saver', dataSaver ? '1' : '0');
+const streamDlg = $('streamDlg');
+function openStreams() {
+  const s = streamStation();
+  if (!s) return;
+  const url = playingUrl(s), sv = saverIndex(s);
+  $('streamTitle').textContent = '📶 ' + s.name.replace(' ⭐', '') + ' streams';
+  let html = '', group = '';
+  s.streams.forEach((x, i) => {
+    if (x.server && x.server !== group) {
+      group = x.server;
+      html += `<div class="grp">${group === 'New' ? 'New server · songs match the website' : i ? 'Old server · backups' : 'Old server'}</div>`;
+    }
+    const badge = i === 0 && s.streams.length > 1 ? '<span class="b best">★ Best</span>'
+      : i === sv && s.streams.length > 1 ? '<span class="b sv">📶 Data saver</span>' : '<span></span>';
+    const name = x.kbps ? (/mp3/i.test(x.url) ? 'MP3 ' : 'AAC ') + x.kbps + ' kbps' : x.label;
+    const size = x.kbps ? `About ${Math.round(x.kbps * 0.45)} MB an hour` : 'Only stream for this channel';
+    html += `<button type="button" class="opt${x.url === url ? ' on' : ''}" data-i="${i}"><span class="rad"></span><span><b>${name}</b><small>${size}</small></span>${badge}</button>`;
+  });
+  $('streamList').innerHTML = html;
+  $('streamBest').hidden = pickedIndex(s) === null;
+  streamDlg.dataset.station = s.id;
+  streamDlg.returnValue = '';
+  streamDlg.showModal();
+}
+// Switch the channel to a link now, wherever it's playing.
+function useStream(s) {
   renderSaver();
-  if (localStation) playHere(localStation);   // switch the stream now
-  else if (castActive()) {                     // and on the speaker, if it's playing a channel with two versions
-    const s = remoteStation();
-    if (s && s !== 'other' && s.lite) loadStation(s);
-  }
+  if (localStation === s) playHere(s);
+  else if (castActive() && remoteStation() === s) loadStation(s);
+}
+$('streamList').addEventListener('click', e => {
+  const o = e.target.closest('.opt');
+  const s = STATIONS.find(x => x.id === streamDlg.dataset.station);
+  if (!o || !s) return;
+  const x = s.streams[+o.dataset.i];
+  if (o.dataset.i === '0') safeSet(pickKey(s), ''); else safeSet(pickKey(s), x.url);
+  diag(s.name + ': stream picked · ' + x.label);
+  streamDlg.close();
+  useStream(s);
 });
+streamDlg.addEventListener('close', () => {
+  const s = STATIONS.find(x => x.id === streamDlg.dataset.station);
+  if (s && streamDlg.returnValue === 'best') { safeSet(pickKey(s), ''); diag(s.name + ': back to best stream'); useStream(s); }
+});
+saverBtn.addEventListener('click', openStreams);
+window.streamReady = true;
 renderSaver();
 
 // Signal got weak while listening: switch to the lighter stream.
 if (net) net.addEventListener('change', () => {
   renderSaver();
-  if (localStation && hereLive && weakSignal() && audio.src !== streamFor(localStation).url) {
-    audio.src = streamFor(localStation).url;
+  if (localStation && hereLive && autoSaver(localStation) && hereUrl !== streamFor(localStation).url) {
+    audio.src = hereUrl = streamFor(localStation).url;
     audio.play().catch(() => {});
   }
 });
@@ -1651,6 +1739,7 @@ function setArt(url) {
 }
 
 function render() {
+  if (window.streamReady) renderSaver();
   const CS = window.cast && cast.framework && cast.framework.CastState;
   const castState = ctx ? ctx.getCastState() : null;
   const session = ctx && ctx.getCurrentSession();
