@@ -293,7 +293,6 @@
   #streamList .grp { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-top: 14px; }
   #streamList .b { font-size: 11px; border-radius: 6px; padding: 2px 7px; white-space: nowrap; }
   #streamList .b.best { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
-  #streamList .b.sv { border: 1px solid var(--line); color: var(--muted); }
   button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible {
     outline: 2px solid var(--accent); outline-offset: 2px;
   }
@@ -445,7 +444,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.14.1';
+const VERSION = '2.14.2';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -1155,7 +1154,7 @@ const streamDlg = $('streamDlg');
 function openStreams() {
   const s = streamStation();
   if (!s) return;
-  const url = playingUrl(s), sv = saverIndex(s);
+  const url = playingUrl(s);
   $('streamTitle').textContent = '📶 ' + s.name.replace(' ⭐', '') + ' streams';
   let html = '', group = '';
   s.streams.forEach((x, i) => {
@@ -1164,7 +1163,7 @@ function openStreams() {
       html += `<div class="grp">${group === 'New' ? 'New server · songs match the website' : i ? 'Old server · backups' : 'Old server'}</div>`;
     }
     const badge = i === 0 && s.streams.length > 1 ? '<span class="b best">★ Best</span>'
-      : i === sv && s.streams.length > 1 ? '<span class="b sv">📶 Data saver</span>' : '<span></span>';
+      : '<span></span>';
     const name = x.kbps ? (/mp3/i.test(x.url) ? 'MP3 ' : 'AAC ') + x.kbps + ' kbps' : x.label;
     const size = x.kbps ? `About ${Math.round(x.kbps * 0.45)} MB an hour` : 'Only stream for this channel';
     html += `<button type="button" class="opt${x.url === url ? ' on' : ''}" data-i="${i}"><span class="rad"></span><span><b>${name}</b><small>${size}</small></span>${badge}</button>`;
@@ -1195,6 +1194,11 @@ $('streamList').addEventListener('click', e => {
 streamDlg.addEventListener('close', () => {
   const s = STATIONS.find(x => x.id === streamDlg.dataset.station);
   if (s && streamDlg.returnValue === 'best') { safeSet(pickKey(s), ''); diag(s.name + ': back to best stream'); useStream(s); }
+});
+// Tapping outside the list closes it.
+streamDlg.addEventListener('click', e => {
+  const r = streamDlg.getBoundingClientRect();
+  if (e.target === streamDlg && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) streamDlg.close();
 });
 saverBtn.addEventListener('click', openStreams);
 window.streamReady = true;
