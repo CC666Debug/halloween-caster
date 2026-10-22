@@ -445,7 +445,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.14.0';
+const VERSION = '2.14.1';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -682,7 +682,7 @@ function loadStation(s, stream = speakerStreamFor(s)) {
   session.loadMedia(req).then(() => { diag('speaker accepted ' + s.name + ' after ' + ((performance.now() - t) / 1000).toFixed(2) + 's'); kickStart(); }).catch(err => {
     diag('speaker REFUSED ' + s.name + ' after ' + ((performance.now() - t) / 1000).toFixed(2) + 's · ' + err);
     const backup = backupFor(s, stream.url);
-    if (backup) { loadStation(s, backup); return; }
+    if (backup) { loadStation(s, backup); pollStations([s]); return; }
     speakerLoading = null;
     showNotice('The speaker couldn’t start ' + s.name + ' (' + err + ').');
     render();
@@ -1131,6 +1131,7 @@ audio.addEventListener('error', () => {
     diag(s.name + ': ' + streamLabel(s, hereUrl) + ' won’t play, trying ' + backup.label);
     audio.src = hereUrl = backup.url;
     renderSaver();
+    pollStations([s]);
     audio.play().catch(() => {});
     return;
   }
@@ -1179,6 +1180,7 @@ function useStream(s) {
   renderSaver();
   if (localStation === s) playHere(s);
   else if (castActive() && remoteStation() === s) loadStation(s);
+  pollStations([s]);   // song info and listeners from the server now being played
 }
 $('streamList').addEventListener('click', e => {
   const o = e.target.closest('.opt');
