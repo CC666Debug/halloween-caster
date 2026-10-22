@@ -392,7 +392,6 @@
   <div class="row">
     <button class="ghost" id="saverBtn" aria-haspopup="dialog">📶 Stream: Best</button>
     <button class="ghost" id="premiumBtn">Add Phantom</button>
-    <button class="ghost" id="newBtn">Add NEW</button>
   </div>
 
   <button class="share-app" id="shareBtn">📤 Share Halloween Caster<small>Send the app to a friend</small></button>
@@ -444,7 +443,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.14.2';
+const VERSION = '2.15.0';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -530,12 +529,11 @@ function playingUrl(s) {
 
 // Supporter channels: each link is pasted once and kept only on this device, never in this public code.
 // Phantom (once called Premium) keeps the old id and saved key, so links saved before the rename still work.
-// NEW (the upgraded Main, on the station's new server) reads its song info from the server in its own link.
+// NEW is gone: its supporter link turned out to be the public Main on the new server (Oct 21, 2026).
 const SUPPORTER = {
   premium: { name: 'Phantom', key: 'hc_premium_url', code: () => 'halloween_radio_premium' },
-  new:     { name: 'NEW', key: 'hc_new_url', code: () => 'new',
-             feed: url => { const m = url.match(/^(https:\/\/[^/]+)\/listen\/([^/]+)/); return m ? `${m[1]}/api/nowplaying_static/${m[2]}.json` : ''; } },
 };
+try { localStorage.removeItem('hc_new_url'); } catch (e) {}
 for (const [id, c] of Object.entries(SUPPORTER)) {
   c.url = safeGet(c.key);
   if (c.url) STATIONS.push({ id, name: c.name + ' ⭐', code: c.code(), url: c.url, feed: c.feed ? c.feed(c.url) : undefined,
@@ -978,7 +976,7 @@ const premiumGo = $('premiumGo');
 let sup = null;           // the supporter channel the dialog is open for
 let premiumFailed = '';   // a link that failed the test; tapping again saves it anyway
 
-for (const [id, btnId] of [['premium', 'premiumBtn'], ['new', 'newBtn']]) {
+for (const [id, btnId] of [['premium', 'premiumBtn']]) {
   const c = SUPPORTER[id], btn = $(btnId);
   btn.textContent = c.url ? `⭐ ${c.name}: on` : `Add ${c.name}`;
   btn.classList.toggle('on', !!c.url);

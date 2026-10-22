@@ -13,14 +13,14 @@ A one-tap phone remote for [Halloween Radio](https://halloweenradio.net). Cast a
 - **A black candle for every song.** 🕯️ It burns down beside the progress bar as the song plays, flame flickering, and a fresh one is lit for the next song.
 - **Song time your way.** Tap the time to switch between time played (`1:26 / 2:23`), time left (`−0:57 / 2:23`), or both (`1:26 · −0:57`).
 - **How many people are listening**, and a 🔴 **LIVE** badge when a real DJ is on air. Channels that are down show as off air.
-- **Data saver.** Switch to the 64 kbps version and use half the data. It works on your phone and on a speaker you're casting to. On the phone it also turns itself on when your signal gets weak (a speaker only changes when you switch it yourself). If a stream won't play, the app quietly tries the other version.
+- **📶 Stream.** Each channel has several links (Halloween Radio's new server first, the old server as backup, and smaller versions that use less data). The best one plays unless you pick another from the Stream button; your pick is kept per channel. On the phone the app drops to the smallest one by itself when your signal gets weak (a speaker only changes when you pick). If a stream won't play, the app quietly tries the next one down.
 - **Keeps playing through drop-outs.** Lose signal on a walk and the app reconnects by itself, on the phone or on a speaker, and the music comes back as soon as the signal does.
 - **Spine-Tingler.** One tap opens Halloween Radio's Spine-Tingler page on the channel you're listening to, so you can rate how spooky the song feels.
 - **Share the app** with the button at the bottom.
 - **Favorites.** Tap 🤍 to save a song (from Now playing or Recently played) and find it later on YouTube, YouTube Music or Spotify. Back them up to a folder once and every save or removal is copied there by itself, in a list file of this device's own (phone, tablet or PC).
 - **Halloween countdown.** Days until October 31 at the top. Tap it and hand-drawn bats, jack-o'-lanterns, ghosts or a coven of witches on broomsticks fly across the screen, a different group each time. On Halloween itself, they come out on their own. 🧙‍♀️
 - **Opens instantly, even offline.** Add it to your home screen and it opens straight away, even with no signal. The music comes back as soon as you reconnect.
-- **Phantom channel** (formerly Premium) for Halloween Radio supporters: paste your own stream link once. The app tests it before saving, keeps it on your phone only, and adds a Phantom channel card that only appears once it's set up. Supporters of Halloween Radio NEW can add it the same way.
+- **Phantom channel** (formerly Premium) for Halloween Radio supporters: paste your own stream link once. The app tests it before saving, keeps it on your phone only, and adds a Phantom channel card that only appears once it's set up.
 
 ## Which browser to use
 
@@ -37,7 +37,7 @@ To use it like an app, open the page in Chrome and choose **Add to Home screen**
 
 - Works with screen readers and a keyboard, too.
 
-- Favorites, your chosen channel, your settings (like Data saver and the time style) and the Phantom link are saved only in your browser. A cookie-free counter (GoatCounter) counts visits to the page; nothing personal is collected.
+- Favorites, your chosen channel, your settings (like your stream picks and the time style) and the Phantom link are saved only in your browser. A cookie-free counter (GoatCounter) counts visits to the page; nothing personal is collected.
 - Found a problem, like a channel that won't play? [Open an issue](https://github.com/CC666Debug/halloween-caster/issues).
 
 ## Credits
