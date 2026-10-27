@@ -443,7 +443,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.15.4';
+const VERSION = '2.15.5';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -472,15 +472,15 @@ const STATIONS = [
   // and if a stream won't play it moves down the list. Order: new server highest to lowest, then old server highest to lowest. New server (stream.halloweenradio.net) is what their website
   // plays now; the old server (radio1.streamserver.link) stays as the backup while it's still running.
   { id: 'main',         name: 'Main',         code: 'halloween_radio_main', streams: [
-    'https://stream.halloweenradio.net/listen/halloween_radio_main/mp3', 'https://stream.halloweenradio.net/listen/halloween_radio_main/aac', 'https://radio1.streamserver.link/radio/8000/hrm-mp3', 'https://radio1.streamserver.link/radio/8000/hrm-aac'] },
+    'https://stream.halloweenradio.net/listen/halloween_radio_main/mp3', 'https://stream.halloweenradio.net/listen/halloween_radio_main/aac', 'https://radio1.streamserver.link/radio/8000/hrm-aac'] },
   { id: 'oldies',       name: 'Oldies',       code: 'halloween_radio_oldies', streams: [
-    'https://stream.halloweenradio.net/listen/halloween_radio_oldies/mp3', 'https://stream.halloweenradio.net/listen/halloween_radio_oldies/aac', 'https://radio1.streamserver.link/radio/8020/hro-mp3', 'https://radio1.streamserver.link/radio/8020/hro-aac'] },
+    'https://stream.halloweenradio.net/listen/halloween_radio_oldies/mp3', 'https://stream.halloweenradio.net/listen/halloween_radio_oldies/aac', 'https://radio1.streamserver.link/radio/8020/hro-aac'] },
   { id: 'kids',         name: 'Kids',         code: 'halloween_radio_kids', streams: [
-    'https://stream.halloweenradio.net/listen/halloween_radio_kids/mp3', 'https://stream.halloweenradio.net/listen/halloween_radio_kids/aac', 'https://radio1.streamserver.link/radio/8030/hrk-mp3', 'https://radio1.streamserver.link/radio/8030/hrk-aac'] },
+    'https://stream.halloweenradio.net/listen/halloween_radio_kids/mp3', 'https://stream.halloweenradio.net/listen/halloween_radio_kids/aac', 'https://radio1.streamserver.link/radio/8030/hrk-aac'] },
   { id: 'movies',       name: 'Soundtracks',  code: 'halloween_radio_soundtracks', streams: [
-    'https://stream.halloweenradio.net/listen/halloween_radio_soundtracks/mp3', 'https://stream.halloweenradio.net/listen/halloween_radio_soundtracks/aac', 'https://radio1.streamserver.link/radio/8050/hrs-mp3', 'https://radio1.streamserver.link/radio/8050/hrs-aac'] },
+    'https://stream.halloweenradio.net/listen/halloween_radio_soundtracks/mp3', 'https://stream.halloweenradio.net/listen/halloween_radio_soundtracks/aac', 'https://radio1.streamserver.link/radio/8050/hrs-aac'] },
   { id: 'atmosphere',   name: 'Atmosphere',   code: 'halloween_radio_atmosphere', streams: [
-    'https://stream.halloweenradio.net/listen/halloween_radio_atmosphere/mp3', 'https://stream.halloweenradio.net/listen/halloween_radio_atmosphere/aac', 'https://radio1.streamserver.link/radio/8040/hra-mp3', 'https://radio1.streamserver.link/radio/8040/hra-aac'] },
+    'https://stream.halloweenradio.net/listen/halloween_radio_atmosphere/mp3', 'https://stream.halloweenradio.net/listen/halloween_radio_atmosphere/aac', 'https://radio1.streamserver.link/radio/8040/hra-aac'] },
   { id: 'instrumental', name: 'Instrumental', code: 'halloween_radio_instrumental', streams: [
     'https://stream.halloweenradio.net/listen/halloween_radio_instrumental/mp3', 'https://stream.halloweenradio.net/listen/halloween_radio_instrumental/aac', 'https://radio1.streamserver.link/radio/8100/hri-aac'] },
   { id: 'cauldron',     name: 'Cauldron',     code: 'halloween_radio_cauldron', streams: [
