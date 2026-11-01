@@ -443,7 +443,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.15.5';
+const VERSION = '2.15.6';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -531,12 +531,13 @@ function playingUrl(s) {
 // Phantom (once called Premium) keeps the old id and saved key, so links saved before the rename still work.
 // NEW is gone: its supporter link turned out to be the public Main on the new server (Oct 21, 2026).
 const SUPPORTER = {
-  premium: { name: 'Phantom', key: 'hc_premium_url', code: () => 'halloween_radio_premium' },
+  // Song info: the new server calls Phantom 'halloween_radio_phatom' (their spelling); the old server keeps 'halloween_radio_premium'.
+  premium: { name: 'Phantom', key: 'hc_premium_url', code: url => isNewServer(url) ? 'halloween_radio_phatom' : 'halloween_radio_premium' },
 };
 try { localStorage.removeItem('hc_new_url'); } catch (e) {}
 for (const [id, c] of Object.entries(SUPPORTER)) {
   c.url = safeGet(c.key);
-  if (c.url) STATIONS.push({ id, name: c.name + ' ⭐', code: c.code(), url: c.url, feed: c.feed ? c.feed(c.url) : undefined,
+  if (c.url) STATIONS.push({ id, name: c.name + ' ⭐', code: c.code(c.url), url: c.url, feed: c.feed ? c.feed(c.url) : undefined,
                              streams: [{ url: c.url, type: /mp3/i.test(c.url) ? 'audio/mpeg' : 'audio/aac', label: 'your supporter link' }] });
 }
 
