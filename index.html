@@ -114,12 +114,14 @@
   /* Volume: the % beside 🔊, its 0-3 sound waves, and the hold-and-slide pop-up. */
   #muteBtn { touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; color: var(--accent); }
   #muteBtn:disabled, #muteBtn.muted { color: var(--muted); }
-  #muteBtn svg { width: 26px; height: 24px; }
-  #muteIcon .wave { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; opacity: .16; }
+  #muteBtn svg { width: 28px; height: 24px; }
+  #muteIcon .wave { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; opacity: .16; }
   #muteIcon .wave.on { opacity: 1; filter: drop-shadow(0 0 2px var(--accent)); }
   #muteBtn.blaring #muteIcon .wave.on { animation: blare 1.1s ease-out infinite; }
-  #muteBtn.blaring #muteIcon .w2.on { animation-delay: .15s; }
-  #muteBtn.blaring #muteIcon .w3.on { animation-delay: .3s; }
+  #muteBtn.blaring #muteIcon .w2.on { animation-delay: .12s; }
+  #muteBtn.blaring #muteIcon .w3.on { animation-delay: .24s; }
+  #muteBtn.blaring #muteIcon .w4.on { animation-delay: .36s; }
+  #muteBtn.blaring #muteIcon .w5.on { animation-delay: .48s; }
   @keyframes blare { 0% { opacity: .35; } 30% { opacity: 1; } 100% { opacity: .5; } }
   @media (prefers-reduced-motion: reduce) { #muteBtn.blaring #muteIcon .wave.on { animation: none; } }
   .volnum { min-width: 42px; margin-left: -6px; font-size: 15px; font-weight: 800; color: var(--accent); text-shadow: 0 0 4px var(--accent), 0 0 12px var(--accent); font-variant-numeric: tabular-nums; }
@@ -444,7 +446,7 @@
 </dialog>
 
 <script>
-const VERSION = '2.15.7';
+const VERSION = '2.16.0';
 // ── Diagnostic log ──────────────────────────────
 // Records each step of connecting and playing, with timings, so problems can be traced from
 // real evidence. Kept on this phone only (last 400 lines, survives a refresh). Tap the
@@ -1860,14 +1862,15 @@ function render() {
 }
 
 // The speaker icon: 0-3 sound waves for the volume, or the crossed-out speaker when muted.
-const WAVES = ['M15.5 8.8a4.5 4.5 0 0 1 0 6.4', 'M18 6.3a8 8 0 0 1 0 11.4', 'M20.5 3.8a11.5 11.5 0 0 1 0 16.4'];
+// Five sound waves, the arcs fanning out from the speaker (same as Four Realms and RadioWizard).
+const WAVES = [3.5, 6, 8.5, 11, 13.5].map(r => { const x = (12 + r * .766).toFixed(2), dy = r * .643; return 'M' + x + ' ' + (12 - dy).toFixed(2) + 'A' + r + ' ' + r + ' 0 0 1 ' + x + ' ' + (12 + dy).toFixed(2); });
 let volIconKey = '';
 function paintVMeter(muted) {
-  const v = +els.vol.value, n = muted ? -1 : v <= 0 ? 0 : v < 34 ? 1 : v < 67 ? 2 : 3;
+  const v = +els.vol.value, n = muted ? -1 : v <= 0 ? 0 : Math.min(5, Math.ceil(v / 20));
   els.muteBtn.classList.toggle('muted', muted);
   if (String(n) === volIconKey) return;   // leave the icon alone so the pulsing doesn't restart
   volIconKey = String(n);
-  els.muteIcon.setAttribute('viewBox', muted ? '0 0 24 24' : '0 0 26 24');
+  els.muteIcon.setAttribute('viewBox', muted ? '0 0 24 24' : '0 0 28 24');
   els.muteIcon.innerHTML = muted ? ICONS.mute : '<path d="M3 9v6h4l5 5V4L7 9H3z"/>' +
     WAVES.map((d, i) => `<path class="wave w${i + 1}${i < n ? ' on' : ''}" d="${d}"/>`).join('');
 }
